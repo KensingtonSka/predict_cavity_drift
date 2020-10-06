@@ -16,10 +16,10 @@ from sklearn.linear_model import LinearRegression
 """ Define paths and other variables """
 
 # root = os.path.dirname(os.path.realpath(__file__))
-root = 'C:\\Users\\hobrh816\\Documents\\Python Scripts\\Cavity Drift Project\\DriftData\\'
+root = 'C:\\Users\\hobrh816\\Documents\\Python_Scripts\\predict_cavity_drift\\DriftData\\'
 # folderpath = '\\\\Singleatomlab\\matlab\\Pro_Em_processing\\'
 folderpath   = '\\\\Singleatomlab2\\matlab\\Pro_Em_processing\\'
-temppath     = 'C:\\Users\\hobrh816\\Documents\\Python Scripts\\Cavity Drift Project\\CR1000IP_ToBurns_TenMins.dat'
+temppath     = 'C:\\Users\\hobrh816\\Documents\\Python_Scripts\\Cavity Drift Project\\CR1000IP_ToBurns_TenMins.dat'
 if not os.path.exists(root):
     os.makedirs(root)
 os.chdir(root)
