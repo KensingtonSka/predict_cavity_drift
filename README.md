@@ -4,7 +4,7 @@ An attempt to use machine learning to predict the non-linear (and non-sine) long
 
 ## Usage
 
-Simply clone and change the paths in `predictCavityDrift.py`
+Simply clone the repo and change the paths in `Scripts/predictCavityDrift.py`
 
 ## Contributing
 Pull requests are welcome. For major changes, please open an issue first to discuss what you would like to change.

@@ -131,20 +131,8 @@ else:
 """ Clean .LVM Data: """
 data = data.sort_values(by=['timestamp']) #<- For now
 
-#Plot raw data:
-# clean.plot_monthBYmonth(data, 'AI7 voltage', line_type = 'o')
 
-fig, ax1 = plt.subplots() 
-data.plot(kind='line',x='timestamp',y='AI7 voltage',color='red',ax=ax1)
-data.plot(kind='line',x='timestamp',y='AI6 voltage',color='blue',ax=ax1)
-#data.plot(kind='line',x='timestamp',y='AirTC_Avg',color='blue',ax=ax1)
-ax1.set_xlabel('Time (s)')
-ax1.set_ylabel('SALLI Voltage (V)')
-ax1.set_title('Raw Data')
-print(data['timestamp'].iloc[0], data['timestamp'].iloc[-1])
-
-
-
+""" Filter out voltage spikes: """
 newdata_temp = clean.filterSpikes(data, 'AI7 voltage', 0.051, counterMax=5)
 newdata = clean.filterSpikes(newdata_temp, 'AI6 voltage', avenoise_ai6)
 
@@ -197,16 +185,22 @@ clean.plot_dayBYday(newframe, 'AI7 voltage', zero_reference=False, timeaxis = 't
 
  #%%
 """ Pearson correlate the data: """
-#Check correlation between data sets:
+from astropy.table import QTable, Table, Column
 to_corr = newframe.infer_objects()  #Correct typing issues
-corr1 = to_corr['AI7 voltage'].corr(to_corr['AI6 voltage'], method='pearson') 
-corr2 = to_corr['AirTC_Avg'].corr(to_corr['AI6 voltage'], method='pearson') 
-corr3 = to_corr['time'].corr(to_corr['AI6 voltage'], method='pearson') 
-corr4 = to_corr['time'].corr(to_corr['AI7 voltage'], method='pearson') 
-corr5 = to_corr['time'].corr(to_corr['AirTC_Avg'], method='pearson') 
+corr_labels = ['AI6 voltage', 'AI7 voltage','AirTC_Avg', 'time']
 
-corr6 = to_corr['time'].corr(to_corr['AI7 voltage'].diff(), method='pearson') 
-print(corr1, corr2, corr3, corr4, corr5, ' ', corr6)
+#Correlating data:
+corrs = []
+#Check correlation between data sets:
+for i, label in enumerate(corr_labels):
+    corr = [round(to_corr[label].corr(to_corr[label2], method='pearson'),2) for ii, label2 in enumerate(corr_labels)]
+    corrs.append(corr)
+
+#Building table:
+corrs.insert(0,corr_labels.copy())
+corr_labels.insert(0, ' ')
+Table(corrs, names=tuple(corr_labels))
+
 
 
 
@@ -267,24 +261,24 @@ print(corr1, corr2, corr3, corr4, corr5, ' ', corr6)
 """ Z-score the data: """
 cleaned_data = newframe.copy()
 
-def zscoreDF(dataframe, col):
-    col_zscore = col + '_zscore'
-    mean = dataframe[col].mean()
-    standard_deviation = dataframe[col].std(ddof=0)
+# def zscoreDF(dataframe, col):
+#     col_zscore = col + '_zscore'
+#     mean = dataframe[col].mean()
+#     standard_deviation = dataframe[col].std(ddof=0)
 
-    dataframe[col_zscore] = (dataframe[col] - mean)/standard_deviation
-    return dataframe, mean, standard_deviation
+#     dataframe[col_zscore] = (dataframe[col] - mean)/standard_deviation
+#     return dataframe, mean, standard_deviation
 
-means = [0, 0] #Means for un-zscoring the data
-stds  = [0, 0] #stds for un-zscoring the data
-cleaned_data, means[0], stds[0] = zscoreDF(cleaned_data, 'AI6 voltage')
-cleaned_data, means[1], stds[1] = zscoreDF(cleaned_data, 'AI7 voltage')
+# means = [0, 0] #Means for un-zscoring the data
+# stds  = [0, 0] #stds for un-zscoring the data
+# cleaned_data, means[0], stds[0] = zscoreDF(cleaned_data, 'AI6 voltage')
+# cleaned_data, means[1], stds[1] = zscoreDF(cleaned_data, 'AI7 voltage')
 
-
+#%%
 """ Remove Nans from the dataframe: """
 # cleaned_data = clearNaNs(cleaned_data)
 is_NaN = cleaned_data.isnull()  #isnull()
-is_NaN = is_NaN['AI6 voltage_zscore'] | is_NaN['AI7 voltage_zscore']
+is_NaN = is_NaN['AI6 voltage'] | is_NaN['AI7 voltage']
 clean_data2 = cleaned_data.drop(cleaned_data[is_NaN].index)
 
 
@@ -297,50 +291,51 @@ clean_data2 = clean_data2.set_index('timestamp')
 """ *********************** """
 """ ** Machine Learning: ** """
 """ *********************** """
-clean_data2 = newframe.cop()
-#Going to try a few learning algorithms:
-algo = {
-      "regression": True
-}
-
-#%% Linear regression (https://stackabuse.com/using-machine-learning-to-predict-the-weather-part-2/)
-from sklearn.model_selection import train_test_split
-from sklearn.linear_model import LinearRegression
-
-# for col in clean_data2.columns: 
-#     print(col) 
-predict_per = 0.05; #Try to predict 5% into the future
-
-# Remove columns which will not be used for learning:
-X_full = clean_data2.drop(['time', 'AI6 voltage', 'AI7 voltage'], axis=1)
-#Shift data acording to the prediction percentage:
-X = X_full.iloc[:-int(predict_per*len(X_full))]
-y = X_full['AI7 voltage_zscore'].iloc[int(predict_per*len(X_full)):]
-
-
-
-# # split data into training set and a temporary set using sklearn.model_selection.traing_test_split
-# X_train, X_tmp, y_train, y_tmp = train_test_split(X, y, test_size=0.2, random_state=23)
-# # take the remaining 20% of data in X_tmp, y_tmp and split them evenly
-# X_test, X_val, y_test, y_val = train_test_split(X_tmp, y_tmp, test_size=0.5, random_state=23)
-
-
-
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2)#, random_state=23)
-
-
-from sklearn.svm import SVC
-from sklearn.preprocessing import StandardScaler
-from sklearn.datasets import make_classification
-from sklearn.model_selection import train_test_split
-from sklearn.pipeline import Pipeline
-
-# pipe = Pipeline([('scaler', StandardScaler()), ('LinearRegression', LinearRegression())])
-pipe = Pipeline([('scaler', StandardScaler()), ('svc', SVC())])
-# The pipeline can be used as any other estimator
-# and avoids leaking the test set into the train set
-pipe.fit(X_train, y_train)
-pipe.score(X_test, y_test)
+if False:
+    clean_data2 = newframe.cop()
+    #Going to try a few learning algorithms:
+    algo = {
+          "regression": True
+    }
+    
+    #%% Linear regression (https://stackabuse.com/using-machine-learning-to-predict-the-weather-part-2/)
+    from sklearn.model_selection import train_test_split
+    from sklearn.linear_model import LinearRegression
+    
+    # for col in clean_data2.columns: 
+    #     print(col) 
+    predict_per = 0.05; #Try to predict 5% into the future
+    
+    # Remove columns which will not be used for learning:
+    X_full = clean_data2.drop(['time', 'AI6 voltage', 'AI7 voltage'], axis=1)
+    #Shift data acording to the prediction percentage:
+    X = X_full.iloc[:-int(predict_per*len(X_full))]
+    y = X_full['AI7 voltage_zscore'].iloc[int(predict_per*len(X_full)):]
+    
+    
+    
+    # # split data into training set and a temporary set using sklearn.model_selection.traing_test_split
+    # X_train, X_tmp, y_train, y_tmp = train_test_split(X, y, test_size=0.2, random_state=23)
+    # # take the remaining 20% of data in X_tmp, y_tmp and split them evenly
+    # X_test, X_val, y_test, y_val = train_test_split(X_tmp, y_tmp, test_size=0.5, random_state=23)
+    
+    
+    
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2)#, random_state=23)
+    
+    
+    from sklearn.svm import SVC
+    from sklearn.preprocessing import StandardScaler
+    from sklearn.datasets import make_classification
+    from sklearn.model_selection import train_test_split
+    from sklearn.pipeline import Pipeline
+    
+    # pipe = Pipeline([('scaler', StandardScaler()), ('LinearRegression', LinearRegression())])
+    pipe = Pipeline([('scaler', StandardScaler()), ('svc', SVC())])
+    # The pipeline can be used as any other estimator
+    # and avoids leaking the test set into the train set
+    pipe.fit(X_train, y_train)
+    pipe.score(X_test, y_test)
 
 
 
@@ -359,7 +354,6 @@ pipe.score(X_test, y_test)
 
 # accuracy = clf.score(X_test,y_test)
 # print(accuracy)
-
 
 
 
