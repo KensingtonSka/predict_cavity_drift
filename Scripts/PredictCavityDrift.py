@@ -10,12 +10,12 @@ import matplotlib.pyplot as plt
 from sortLVM import sortLVMdata, appendLVMdata
 import CleanCavityDataFunctions as clean
 
-from sklearn.linear_model import LinearRegression
 
 #%%
 """ Define paths and other variables """
+#Temperature Drift: AI6 voltage
+#Frequency Drift:   AI7 voltage
 
-# root = os.path.dirname(os.path.realpath(__file__))
 root = 'C:\\Users\\hobrh816\\Documents\\Python_Scripts\\predict_cavity_drift\\DriftData\\'
 # folderpath = '\\\\Singleatomlab\\matlab\\Pro_Em_processing\\'
 folderpath   = '\\\\Singleatomlab2\\matlab\\Pro_Em_processing\\'
@@ -33,8 +33,8 @@ datadict = {
   "read_onebyone": True
 }
 
-avenoise_ai6 = 0.108 #0.10772700000000013  #/2
-avenoise_ai7 = 0.014 #0.013732000000000077 #/2
+avenoise_ai6 = 0.108 #0.10772700000000013
+avenoise_ai7 = 0.014 #0.013732000000000077
 
 # Dates prior to thermistor box sitchover:
 # '20200520', '20200521', '20200522', '20200523', '20200524', '20200525', '20200526', 
@@ -73,14 +73,10 @@ folders=['20200909', '20200910', '20200911', '20200712', '20200713', '20200714',
          '20200928', '20200929', '20200930',
          '20201001', '20201002', '20201003', '20201004', '20201005']
 
-# strr = ''
-# for i in range(1,7):
-#     strr = strr + '\'2020100' + str(i) + '\', '
-# print(strr)
-
 
 
 #%%
+""" Get data! """
 """ ******************* """
 if folders == [] and datadict['load_data']:
     print("You need to give me something to work with!!")
@@ -128,138 +124,42 @@ else:
         print('Saved: ' + datadict['filename'][0])
 
 #%%
+""" ################ """
 """ Clean .LVM Data: """
+""" ################ """
 data = data.sort_values(by=['timestamp']) #<- For now
 
-
 """ Filter out voltage spikes: """
-newdata_temp = clean.filterSpikes(data, 'AI7 voltage', 0.051, counterMax=5)
-newdata = clean.filterSpikes(newdata_temp, 'AI6 voltage', avenoise_ai6)
-
+clean_data = clean.filterSpikes(data.copy(), 'AI7 voltage', 0.051, counterMax=5)
+clean_data = clean.filterSpikes(clean_data, 'AI6 voltage', avenoise_ai6)
 
 """ Remove Nans from the dataframe: """
-# clean_data = clearNaNs(clean_data)
-is_NaN = newdata.isnull()  #isnull()
-is_NaN = is_NaN['AI6 voltage'] | is_NaN['AI7 voltage']
-clean_data = newdata.drop(newdata[is_NaN].index)
-clean_data = clean_data.reset_index()
+clean_data = clean.clearNaNs(clean_data)
 
-
-""" Plot data for inspection: """
-clean.plot_monthBYmonth(clean_data, 'AI7 voltage')
-clean.plot_dayBYday(clean_data, 'AI7 voltage', zero_reference=False, timeaxis = 'timestamp')
+# """ Plot data for inspection: """
+# clean.plot_monthBYmonth(clean_data, 'AI7 voltage', print_text=False)
+# clean.plot_dayBYday(clean_data, 'AI7 voltage', zero_reference=False, timeaxis = 'timestamp', print_text=False)
 
 #%% Interpolation:
 """ day by day interpolation: """
-workingframe = clean.interpolate_dayBYday(clean_data, avenoise_ai7, sample_period=sample_period)
-# clean.plot_monthBYmonth(data, 'AI7 voltage')
-# clean.plot_monthBYmonth(workingframe, 'AI7 voltage')
+corrected_data = clean.interpolate_dayBYday(clean_data.copy(), avenoise_ai7, sample_period=sample_period, print_text=False)
 
 """ between day interpolation: """
-newframe = clean.interpolate_betweenDays(workingframe)
-
-clean.plot_monthBYmonth(newframe, 'AI7 voltage')
-clean.plot_dayBYday(newframe, 'AI7 voltage', zero_reference=False, timeaxis = 'timestamp')
-
-#%%
-# #Plot all data after interpolation:
-# fig, ax1 = plt.subplots() 
-# # newframe.plot(kind='line',x='timestamp',y='AI7 voltage',color='red',ax=ax1)
-# newframe.plot(kind='scatter',x='timestamp',y='AI6 voltage',color='blue',ax=ax1)
-# #data.plot(kind='line',x='timestamp',y='AirTC_Avg',color='blue',ax=ax1)
-# ax1.set_xlabel('Time (s)')
-# ax1.set_ylabel('SALLI Voltage (V)')
-# ax1.set_title('Marvin\'s Thermistors')
-
-
-
-# fig, ax1 = plt.subplots() 
-# newframe.plot(kind='scatter',x='timestamp',y='AirTC_Avg',color='green',ax=ax1)
-# ax1.set_xlabel('Time (s)')
-# ax1.set_ylabel('Temperature (C)')
-# ax1.set_title('Geography Wheather Station')
+corrected_data = clean.interpolate_betweenDays(corrected_data.copy())
 
 
 
 
-
- #%%
-""" Pearson correlate the data: """
-from astropy.table import QTable, Table, Column
-to_corr = newframe.infer_objects()  #Correct typing issues
-corr_labels = ['AI6 voltage', 'AI7 voltage','AirTC_Avg', 'time']
-
-#Correlating data:
-corrs = []
-#Check correlation between data sets:
-for i, label in enumerate(corr_labels):
-    corr = [round(to_corr[label].corr(to_corr[label2], method='pearson'),2) for ii, label2 in enumerate(corr_labels)]
-    corrs.append(corr)
-
-#Building table:
-corrs.insert(0,corr_labels.copy())
-corr_labels.insert(0, ' ')
-Table(corrs, names=tuple(corr_labels))
-
-
-
-
-
-
-
-# newnewdata_temp = clean.finefilter(newdata, 'AI7 voltage', 50, loops = 10) #! -> ???
-# fine_data = clean.finefilter(newnewdata_temp, 'AI6 voltage', 50)
-
-#clean_data = clean.movingFilter(fine_data, 'AI7 voltage', threshold=1)
-
-#clean_data = clean.calibrate(fine_data)
-
-
-
-#clean_data, noise = clean.charNoise(fine_data, window_width=1000)
-
-
-
-# """ Sanity plot """
-# fig, ax1 = plt.subplots() 
-# newdata.plot(kind='line',x='time',y='AI7 voltage',color='red',ax=ax1)
-# newdata.plot(kind='line',x='time',y='AI6 voltage',color='blue',ax=ax1)
-# ax1.set_xlabel('Time (s)')
-# ax1.set_ylabel('SALLI Voltage (V)')
-# ax1.set_title('Raw Data')
-# #ax1.set_xlim([475000, 510000]) #ax1.set_xlim([120000, 145000])
-
-
-
-
-# fig, ax1 = plt.subplots() 
-# clean_data.plot(kind='scatter', x='time', y='AI7 voltage', color='red',  ax=ax1)
-# clean_data.plot(kind='scatter', x='time', y='AI6 voltage', color='blue', ax=ax1)
-# ax1.set_xlabel('Time (s)')
-# ax1.set_ylabel('SALLI Voltage (V)')
-# ax1.set_title('Raw Data')
-
-
-# clean_data['AI6 voltage'].plot()
-# clean_data['AI7 voltage'].plot()
-
-
-# # """ Sanity plot """
-# # fig, ax1 = plt.subplots() 
-# # noise.plot(kind='line',x='time',y='AI7 voltage',color='red',ax=ax1)
-# # noise.plot(kind='line',x='time',y='AI6 voltage',color='blue',ax=ax1)
-# # ax1.set_xlabel('Time (s)')
-# # ax1.set_ylabel('SALLI Voltage (V)')
-# # ax1.set_title('Raw Data')
-
-
+""" Plot data for inspection: """
+clean.plot_monthBYmonth(corrected_data, 'AI7 voltage', print_text=False)
+clean.plot_dayBYday(corrected_data, 'AI7 voltage', zero_reference=False, timeaxis = 'timestamp', print_text=False)
 
 
 
 
 #%%
 """ Z-score the data: """
-cleaned_data = newframe.copy()
+# cleaned_data = newframe.copy()
 
 # def zscoreDF(dataframe, col):
 #     col_zscore = col + '_zscore'
@@ -274,16 +174,36 @@ cleaned_data = newframe.copy()
 # cleaned_data, means[0], stds[0] = zscoreDF(cleaned_data, 'AI6 voltage')
 # cleaned_data, means[1], stds[1] = zscoreDF(cleaned_data, 'AI7 voltage')
 
-#%%
-""" Remove Nans from the dataframe: """
-# cleaned_data = clearNaNs(cleaned_data)
-is_NaN = cleaned_data.isnull()  #isnull()
-is_NaN = is_NaN['AI6 voltage'] | is_NaN['AI7 voltage']
-clean_data2 = cleaned_data.drop(cleaned_data[is_NaN].index)
-
+#%% Calibration:
+""" Calibrate: """
+calibrated_data = clean.calibrate(corrected_data)
+calibrated_data['Delta Drift (MHz)'] = calibrated_data['Cavity Drift (MHz)'].diff()
 
 """ Set timestamps as the dataframe index: """
-clean_data2 = clean_data2.set_index('timestamp')
+calibrated_data = calibrated_data.set_index('timestamp')
+calibrated_data = calibrated_data.drop(['AI6 voltage', 'AI7 voltage'], axis=1)
+
+
+
+#%%
+""" Pearson correlate the data: """
+from astropy.table import QTable, Table, Column
+to_corr = calibrated_data.infer_objects()  #Correct typing issues
+
+#Get dataframe headers:
+corr_labels = calibrated_data.columns.values.tolist()[1:] #<- drop the index header
+
+#Correlating data:
+corrs = []
+#Check correlation between data sets:
+for i, label in enumerate(corr_labels):
+    corr = [round(to_corr[label].corr(to_corr[label2], method='pearson'),2) for ii, label2 in enumerate(corr_labels)]
+    corrs.append(corr)
+
+#Building table:
+corrs.insert(0,corr_labels.copy())
+corr_labels.insert(0, ' ')
+table = Table(corrs, names=tuple(corr_labels))
 
 
 
@@ -291,71 +211,87 @@ clean_data2 = clean_data2.set_index('timestamp')
 """ *********************** """
 """ ** Machine Learning: ** """
 """ *********************** """
-if False:
-    clean_data2 = newframe.cop()
-    #Going to try a few learning algorithms:
-    algo = {
-          "regression": True
-    }
-    
+if True:
     #%% Linear regression (https://stackabuse.com/using-machine-learning-to-predict-the-weather-part-2/)
     from sklearn.model_selection import train_test_split
     from sklearn.linear_model import LinearRegression
+    from sklearn.linear_model import Ridge
+    from sklearn.linear_model import Lasso
+    from sklearn.svm import SVR
     
-    # for col in clean_data2.columns: 
-    #     print(col) 
     predict_per = 0.05; #Try to predict 5% into the future
-    
+
     # Remove columns which will not be used for learning:
-    X_full = clean_data2.drop(['time', 'AI6 voltage', 'AI7 voltage'], axis=1)
-    #Shift data acording to the prediction percentage:
-    X = X_full.iloc[:-int(predict_per*len(X_full))]
-    y = X_full['AI7 voltage_zscore'].iloc[int(predict_per*len(X_full)):]
+    X_full = calibrated_data.drop(['Delta Drift', 'Cavity Drift'], axis=1)
+    predict_idx = int(predict_per*len(X_full))
+    print('Prediction duration: ',(calibrated_data['time'][-1]-clean_data2['time'][-predict_idx])/3600, ' h')
+
+
+    #Take a subset for train-testing:
+    dset = ['Cavity Drift', 'Delta Drift']
+    select = 0
+    X = X_full.iloc[1:].to_numpy()
+    y = calibrated_data[dset[select]].iloc[1:].to_numpy()
     
     
+    from sklearn.feature_selection import SelectKBest
+    from sklearn.feature_selection import chi2
+    from sklearn.feature_selection import f_regression
+    from sklearn.feature_selection import mutual_info_regression
     
-    # # split data into training set and a temporary set using sklearn.model_selection.traing_test_split
-    # X_train, X_tmp, y_train, y_tmp = train_test_split(X, y, test_size=0.2, random_state=23)
-    # # take the remaining 20% of data in X_tmp, y_tmp and split them evenly
-    # X_test, X_val, y_test, y_val = train_test_split(X_tmp, y_tmp, test_size=0.5, random_state=23)
+    use_sklearn_feature_select = False
+    if use_sklearn_feature_select:
+        X = SelectKBest(f_regression, k=2).fit_transform(X, y)
     
+    #Split learning and prediction data:
+    X_predict = X[-predict_idx:]
+    X = X[:-predict_idx]
+    y = y[:-predict_idx]
     
-    
+
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2)#, random_state=23)
     
     
-    from sklearn.svm import SVC
+    from sklearn import tree #tree.DecisionTreeRegressor()
     from sklearn.preprocessing import StandardScaler
     from sklearn.datasets import make_classification
     from sklearn.model_selection import train_test_split
     from sklearn.pipeline import Pipeline
+    from sklearn.feature_selection import SelectFromModel
+    from sklearn.svm import LinearSVC
     
-    # pipe = Pipeline([('scaler', StandardScaler()), ('LinearRegression', LinearRegression())])
-    pipe = Pipeline([('scaler', StandardScaler()), ('svc', SVC())])
+    pipe = Pipeline([('scaler', StandardScaler()), 
+                     # ('feature_selection', SelectFromModel(LinearSVC(penalty="l1"))),
+                     # ('reg', LinearRegression())])
+                       ('ridge', Ridge())])
+                     # ('lasso', Lasso())])
+                      # ('SVM', SVR(kernel='linear'))])
+    # pipe = Pipeline([('scaler', StandardScaler()), ('tree', tree.DecisionTreeRegressor(criterion='mae'))])
+    
     # The pipeline can be used as any other estimator
     # and avoids leaking the test set into the train set
     pipe.fit(X_train, y_train)
-    pipe.score(X_test, y_test)
+    print(abs(pipe.score(X_test, y_test)))
+
+    y_predict = pipe.predict(X_predict)
 
 
 
 
+    fig, axs = plt.subplots(2)
+    fig.suptitle('Model Prediction of ' + dset[select])
+    
+    # #Full plot for reference:
+    # axs[0].plot(calibrated_data['time'], calibrated_data[dset[select]],'-b')
+    # axs[0].plot(calibrated_data['time'][-predict_idx:], y_predict,'-r')
+    
+    #Predicted part:
+    axs[0].plot(calibrated_data['time'][-predict_idx:], calibrated_data[dset[select]][-predict_idx:],'-b')
+    axs[0].plot(calibrated_data['time'][-predict_idx:], y_predict,'.r')
 
-
-
-
-
-# clf = LinearRegression() #Define the algorithim we are using for the training (model)
-# clf.fit(X_train, y_train) #<-- Train the algorithm
-
-# # #Save the classifier
-# # with open('linearregression.pickle','wb') as f:
-# #     pickle.dump(clf, f)
-
-# accuracy = clf.score(X_test,y_test)
-# print(accuracy)
-
-
+    #Diff prediction:
+    axs[1].plot(calibrated_data['time'][-(predict_idx-1):], np.diff(calibrated_data[dset[select]][-predict_idx:]),'-b')
+    axs[1].plot(calibrated_data['time'][-(predict_idx-1):], np.diff(y_predict),'.r')
 
 
 

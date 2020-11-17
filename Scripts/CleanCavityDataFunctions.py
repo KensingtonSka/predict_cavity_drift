@@ -61,6 +61,7 @@ def filterSpikes(data, col2filt, threshold, **kwargs):
         if not catch:
             spikeindex = df[ spikebool ].index
             testframe[col2filt].loc[ spikeindex ] = np.nan
+        
     return testframe
 
 
@@ -280,7 +281,9 @@ def clearNaNs(dataframe):
     is_NaN = is_NaN['AI6 voltage'] | is_NaN['AI7 voltage']
 
     dataframe = dataframe.drop(dataframe[is_NaN].index)
+    dataframe = dataframe.reset_index()
     return dataframe
+
 
 
 
@@ -336,7 +339,7 @@ def interpolate(dataframe, avenoise_ai7, sample_period = 600, threshold = [3e-07
 """ ************************** """
 """ Day-by-day interpolations: """
 """ ************************** """
-def interpolate_dayBYday(dataframe, avenoise_ai7, sample_period = 600):
+def interpolate_dayBYday(dataframe, avenoise_ai7, sample_period = 600, print_text=True):
     """ Interpolation (day-by-day): """
     """ The goal of this code is to load up a day of data and look for any voltage 
         jumps that occur. We do this day by day first because the jumps should be 
@@ -362,8 +365,9 @@ def interpolate_dayBYday(dataframe, avenoise_ai7, sample_period = 600):
     workingframe = dataframe.copy()
     
     #Loop through each day:
-    for day in N_days: #day = 49
-        print('Day: ', day)
+    for day in N_days:
+        if print_text:
+            print('Day: ', day)
         #Start by calling data corresponding to-day:  xD
         boo = [day == idx for idx in day_idx]
         tempframe = workingframe[boo]
@@ -379,7 +383,8 @@ def interpolate_dayBYday(dataframe, avenoise_ai7, sample_period = 600):
             #Look for a voltage jump:
             jump = np.abs(tempframe['AI7 voltage'].diff()) > avenoise_ai7
             anyjump = jump.any()
-            print('Jumps remaining: ', len([i for i in jump if i]))
+            if print_text:
+                print('Jumps remaining: ', len([i for i in jump if i]))
             
             #If a jump exists, interpolate:
             if anyjump:
@@ -401,7 +406,8 @@ def interpolate_dayBYday(dataframe, avenoise_ai7, sample_period = 600):
     
                 #Check if there is enough data on the right for a good fit:
                 if ((end_idx - start_idx) > 6) and (start_idx > 6):
-                    print('Performing full interpolation')
+                    if print_text:
+                        print('Performing full interpolation')
                     #Fit a line to the right data:
                     x = tempframe['time'].iloc[start_idx:end_idx]
                     y = tempframe['AI7 voltage'].iloc[start_idx:end_idx]
@@ -412,12 +418,14 @@ def interpolate_dayBYday(dataframe, avenoise_ai7, sample_period = 600):
                     
                 #Check if there is enough data on the left for a good fit:
                 elif start_idx > 6:
-                    print('Performing half interpolation')
+                    if print_text:
+                        print('Performing half interpolation')
                     #Just use the left's interpolation:
                     offset = left_slope*tempframe['time'].iloc[start_idx] + left_intercept - tempframe['AI7 voltage'].iloc[start_idx]
                 
                 else:
-                    print('Performing no interpolation')
+                    if print_text:
+                        print('Performing no interpolation')
                     #Just use 0.95 of the natural offset:
                     offset = tempframe['AI7 voltage'].iloc[start_idx-1] - tempframe['AI7 voltage'].iloc[end_idx-1]
                     gap = np.abs(tempframe['time'].iloc[start_idx-1] - tempframe['time'].iloc[end_idx-1])/sample_period
@@ -446,12 +454,17 @@ def interpolate_betweenDays(dataframe, threshold = [3e-07, 0.1]):
     """ Interpolation (between days): """
     #   threshold = [voltage gradient, voltage jump]
     """ The goal of this code is to load up and look at the voltage changes 
-        between day's data. If the voltage jump and slope are the thresholds
-        set in threshold then the data prior to said jump is shifted by the 
-        voltage difference. 
-        [Major assumptions: 1) the left side is correct
+        between each day's data. If the voltage jump and slope are greater
+        than the thresholds set in threshold then the data prior to said jump 
+        is shifted by the voltage difference. 
+        [Major assumptions: 1) the left side is in the correct position
                             2) the drift is linear for short durations
                             3) the majority of the data is already correct]
+         
+        NOTE:
+        You will run into index errors in this function if the dataframe has
+        any nan's in it. So you should run the function clearNaNs prior to
+        use.
     """
     # from scipy import stats
     #Count the number of days present in the data:
@@ -469,6 +482,8 @@ def interpolate_betweenDays(dataframe, threshold = [3e-07, 0.1]):
         #Start by calling data corresponding to-day:  xD
         boo = [day == idx for idx in day_idx]
         tempframe = workingframe[boo]
+        
+        #Find the maximum voltage:
         maxx = tempframe['AI7 voltage'].max()
         loc = [i for i in range(len(tempframe)) if tempframe['AI7 voltage'].iloc[i] == maxx]
         
@@ -509,7 +524,7 @@ def interpolate_betweenDays(dataframe, threshold = [3e-07, 0.1]):
 """ ******************* """
 """ Apply calibrations: """
 """ ******************* """
-def calibrate(dataframe, **kwargs):
+def calibrate(dataframe, remove_old_columns=False, **kwargs):
     # This function can be used to calibrate the data contained in the dataframe.
     # However, there's not much point prior to the machine learning script as
     # the data will need to be z-scored anyway.
@@ -526,11 +541,11 @@ def calibrate(dataframe, **kwargs):
     f_AG = 900e-6 #THz
     A = ((WavemeterTiSapph+(2*f_AG))/Wavemeter780)
         
-    #date which seperates which thermistor calibration parameters to use (T_calib_pre / T_calib_post): 
-    #thermo_switch_time = '2020-06-30 11:06:00' #737972.48 in matlab datenum
+    # date which seperates which thermistor calibration parameters to use (T_calib_pre / T_calib_post): 
+    # thermo_switch_time = '2020-06-30 11:06:00' #737972.48 in matlab datenum
     thermo_switch_time = datetime.datetime.strptime('2020-06-30 11:06:00', '%Y-%m-%d %H:%M:%S')
     
-    #Calibration Curves:
+    # Calibration Curves:
     AOM          = [0.115073276406473,  168.386]
     AOMerr       = [6.9436e-4,          0.42381]
     T_calib_pre  = [1.5357,             19.6512] #linear stienhart-hart
@@ -542,18 +557,25 @@ def calibrate(dataframe, **kwargs):
     TinC_pre     = T_calib_pre[0]*dataframe[cavTemp] + T_calib_pre[1]
     TinC_post    = T_calib_post[0]*(dataframe[cavTemp] - new_thermo_offset_voltage) + T_calib_post[1]
     
-    """Use thermo_switch_time to create a new dataframe column from TinC_pre and TinC_post: """
-    #Get index of the switch date:
+    """Use thermo_switch_time to determine switch-over point: """
+    # Get index of the switch date:
     cut = dataframe['timestamp'] > thermo_switch_time
-    cut_idx = dataframe[ cut ].index
+    cut_idx = dataframe[ cut ].index[0]
     
-    #Make a new data array:
+    # Make a new data array for the lab's internal temperature data:
+    T_lab = TinC_pre.iloc[:cut_idx].to_numpy().tolist() + \
+            TinC_post.iloc[cut_idx:].to_numpy().tolist()
     
     
-    #append to dataframe:
+    # Append frequency and internal temperature data to the dataframe:
+    newframe = dataframe.copy()
+    newframe['Lab T (C)'] = T_lab
+    newframe['Cavity Drift (MHz)'] = freqAG_correction
     
+    if remove_old_columns:
+        clean_data2.drop([cavTemp, cavDrift], axis=1)
     
-    return dataframe
+    return newframe
     
     
     
@@ -570,7 +592,7 @@ def calibrate(dataframe, **kwargs):
 """ ********************************** """
 """ Plotting data, month-by-month:     """
 """ ********************************** """
-def plot_monthBYmonth(dataframe, column, fixcolour=False):
+def plot_monthBYmonth(dataframe, column, fixcolour=False, print_text=True):
     day_idx = dataframe['timestamp'] - dataframe['timestamp'][0]
     day_idx = [timestamp.days for timestamp in day_idx]
     month_idx = [(12*(dataframe['timestamp'][i].year - dataframe['timestamp'][0].year)) + (dataframe['timestamp'][i].month - dataframe['timestamp'][0].month) for i in range(len(dataframe['timestamp']))]
@@ -595,7 +617,8 @@ def plot_monthBYmonth(dataframe, column, fixcolour=False):
         mi = months[ii]
         row = np.mod(ii, plotdim[0])
         col = int(np.floor(ii/ plotdim[1]))
-        print('Current plot: ', row, col )
+        if print_text:
+            print('Current plot: ', row, col )
         
     
         #Get the actual index locations of the months:
@@ -613,7 +636,9 @@ def plot_monthBYmonth(dataframe, column, fixcolour=False):
             day_colour = [rainbow[days_in_month[i]-days_in_month[0]] for i in range(len(days_in_month))]
         else:
             day_colour = rainbow_gradient(len(days_in_month))
-        print(len(days_in_month))
+        #Display user information:
+        if print_text:
+            print(len(days_in_month))
         
         for index in range(len(days_in_month)):
             di = days_in_month[index]
@@ -670,7 +695,9 @@ def plot_monthBYmonth(dataframe, column, fixcolour=False):
 """ ********************************** """
 """ Plotting data, day-by-day:         """
 """ ********************************** """
-def plot_dayBYday(dataframe, column, line_type='-', zero_reference = True, timeaxis = 'time'):
+def plot_dayBYday(dataframe, column, line_type='-', 
+                  zero_reference = True, timeaxis = 'time',
+                  print_text=True):
     day_idx = dataframe['timestamp'] - dataframe['timestamp'][0]
     day_idx = [timestamp.days for timestamp in day_idx]
     N_days   = list(set(day_idx))
@@ -682,7 +709,8 @@ def plot_dayBYday(dataframe, column, line_type='-', zero_reference = True, timea
     for day in N_days:
         idx_counter += 1
         #Get data corresponding to-day
-        print('Plotting day ', day)
+        if print_text:
+            print('Plotting day ', day)
         boo = [day == idx for idx in day_idx]
         to_plot = dataframe[boo].copy()
         
@@ -757,7 +785,8 @@ def RGBave(C1, C2, w1=0.5, w2=0.5):
     """Returns the weighted average between two rgb numpy arrays C1 & C2.
        Here the RGB values are converted back to a linear scale before 
        being averaged, and then converted back. """
-       # Cn: colour n, wn: weight n
+       # Cn: colour n
+       # wn: weight n
     average = w1*(C2**2) + w2*(C1**2)
     average = average/(w1 + w2)
     return np.sqrt(average)
