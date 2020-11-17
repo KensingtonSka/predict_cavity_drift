@@ -1,14 +1,17 @@
 #bops: https://www.youtube.com/watch?v=SpnSNPg-giU
 import os
-import datetime
-import time
-from pathlib import Path
+# import datetime
+# import time
+# from pathlib import Path
 
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+from itertools import compress
+
 from sortLVM import sortLVMdata, appendLVMdata
 import CleanCavityDataFunctions as clean
+
 
 
 #%%
@@ -211,92 +214,146 @@ table = Table(corrs, names=tuple(corr_labels))
 """ *********************** """
 """ ** Machine Learning: ** """
 """ *********************** """
-if True:
-    #%% Linear regression (https://stackabuse.com/using-machine-learning-to-predict-the-weather-part-2/)
-    from sklearn.model_selection import train_test_split
-    from sklearn.linear_model import LinearRegression
-    from sklearn.linear_model import Ridge
-    from sklearn.linear_model import Lasso
-    from sklearn.svm import SVR
-    
-    predict_per = 0.05; #Try to predict 5% into the future
+from sklearn.pipeline import Pipeline
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+from sklearn.datasets import make_classification
 
-    # Remove columns which will not be used for learning:
-    X_full = calibrated_data.drop(['Delta Drift', 'Cavity Drift'], axis=1)
+#Models:
+from sklearn.linear_model import LinearRegression
+from sklearn.linear_model import Ridge
+from sklearn.linear_model import Lasso
+from sklearn.svm import SVR
+from sklearn import tree #tree.DecisionTreeRegressor()
+from sklearn.svm import LinearSVC
+
+#Feature selection:
+from sklearn.feature_selection import SelectFromModel
+from sklearn.feature_selection import SelectKBest
+from sklearn.feature_selection import chi2
+from sklearn.feature_selection import f_regression
+from sklearn.feature_selection import mutual_info_regression
+
+#%% Using linearegression to estimate the linear trend:
+X = calibrated_data['time'].to_numpy().reshape(-1, 1)
+y = calibrated_data['Cavity Drift (MHz)'].to_numpy()
+
+pipe = Pipeline([('scaler', StandardScaler()), ('Linear Regression', LinearRegression())])
+pipe.fit(X, y)
+y_trend = pipe.predict(X)
+
+# plt.plot(X,y-y_trend)
+apply_detrend = False
+if apply_detrend:
+    calibrated_data['Cavity Drift (MHz)'] = calibrated_data['Cavity Drift (MHz)'] - y_trend
+
+
+#%% Going through a few models to find one that best predicts the data:
+
+# Remove columns which will not be used for learning:
+X_full = calibrated_data.drop(['Cavity Drift (MHz)', 'Delta Drift (MHz)'], axis=1)
+
+#Pick a subset of the data to be "the future":
+use_percentage = False
+if use_percentage:
+    days = 1 #Try to predict n days into the future
+    foo = abs(calibrated_data['time'] - days*86400)
+    foo = (foo == min(foo))
+    
+    predict_idx = list(compress(range(len(foo)), foo))
+    
+else:
+    predict_per = 0.05 #Try to predict 5% into the future
     predict_idx = int(predict_per*len(X_full))
-    print('Prediction duration: ',(calibrated_data['time'][-1]-clean_data2['time'][-predict_idx])/3600, ' h')
+
+print('Prediction duration: ',(calibrated_data['time'][-1]-calibrated_data['time'][-predict_idx])/3600, ' h')
 
 
-    #Take a subset for train-testing:
-    dset = ['Cavity Drift', 'Delta Drift']
-    select = 0
-    X = X_full.iloc[1:].to_numpy()
-    y = calibrated_data[dset[select]].iloc[1:].to_numpy()
+#Take a subset for train-testing:
+dset = ['Cavity Drift (MHz)', 'Delta Drift (MHz)']
+select = 0
+X = X_full.iloc[1:].to_numpy()
+y = calibrated_data[dset[select]].iloc[1:].to_numpy()
+
+
+
+#Have sklearn decide which features are good features:
+use_sklearn_feature_select = False
+if use_sklearn_feature_select:
+    X = SelectKBest(f_regression, k=2).fit_transform(X, y)
+
+#Split learning and prediction data:
+X_predict = X[-predict_idx:]
+X = X[:-predict_idx]
+y = y[:-predict_idx]
+
+
+
+
+#Choose a few models to fit the data with:
+models = [('Linear Regression', LinearRegression()),
+          ('Ridge Regression', Ridge()),
+          ('Lasso Regression', Lasso()),
+          ('SVM (linear)', SVR(kernel='linear')),
+          ('SVM (poly)', SVR(kernel='poly'))]
+          # ('MAE DecisionTreeRegressor', tree.DecisionTreeRegressor(criterion='mae')),
+          # ('MSE DecisionTreeRegressor', tree.DecisionTreeRegressor())
+scores = []
+
+itt = 100
+for model in models:
+    average_score = []
+    for i in range(itt):
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2)#, random_state=23)
+        pipe = Pipeline([('scaler', StandardScaler()), model])
     
-    
-    from sklearn.feature_selection import SelectKBest
-    from sklearn.feature_selection import chi2
-    from sklearn.feature_selection import f_regression
-    from sklearn.feature_selection import mutual_info_regression
-    
-    use_sklearn_feature_select = False
-    if use_sklearn_feature_select:
-        X = SelectKBest(f_regression, k=2).fit_transform(X, y)
-    
-    #Split learning and prediction data:
-    X_predict = X[-predict_idx:]
-    X = X[:-predict_idx]
-    y = y[:-predict_idx]
-    
+        # The pipeline can be used as any other estimator
+        # and avoids leaking the test set into the train set
+        pipe.fit(X_train, y_train)
+        average_score.append(abs(pipe.score(X_test, y_test)))
+        
+    scores.append(np.mean(np.array(average_score)))
 
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2)#, random_state=23)
-    
-    
-    from sklearn import tree #tree.DecisionTreeRegressor()
-    from sklearn.preprocessing import StandardScaler
-    from sklearn.datasets import make_classification
-    from sklearn.model_selection import train_test_split
-    from sklearn.pipeline import Pipeline
-    from sklearn.feature_selection import SelectFromModel
-    from sklearn.svm import LinearSVC
-    
-    pipe = Pipeline([('scaler', StandardScaler()), 
-                     # ('feature_selection', SelectFromModel(LinearSVC(penalty="l1"))),
-                     # ('reg', LinearRegression())])
-                       ('ridge', Ridge())])
-                     # ('lasso', Lasso())])
-                      # ('SVM', SVR(kernel='linear'))])
-    # pipe = Pipeline([('scaler', StandardScaler()), ('tree', tree.DecisionTreeRegressor(criterion='mae'))])
-    
-    # The pipeline can be used as any other estimator
-    # and avoids leaking the test set into the train set
-    pipe.fit(X_train, y_train)
-    print(abs(pipe.score(X_test, y_test)))
 
-    y_predict = pipe.predict(X_predict)
+#Which was best?
+best_idx = [i for i, score in enumerate(scores) if score == max(scores)][0]
+best_model = models[best_idx][0]
+print('The best score is ' + str(scores[best_idx]) + ' from ' + best_model)
+
+
+#Reapply the 'best' model:
+pipe = Pipeline([('scaler', StandardScaler()), models[best_idx]])
+pipe.fit(X_train, y_train)
 
 
 
 
-    fig, axs = plt.subplots(2)
-    fig.suptitle('Model Prediction of ' + dset[select])
-    
-    # #Full plot for reference:
-    # axs[0].plot(calibrated_data['time'], calibrated_data[dset[select]],'-b')
-    # axs[0].plot(calibrated_data['time'][-predict_idx:], y_predict,'-r')
-    
-    #Predicted part:
-    axs[0].plot(calibrated_data['time'][-predict_idx:], calibrated_data[dset[select]][-predict_idx:],'-b')
-    axs[0].plot(calibrated_data['time'][-predict_idx:], y_predict,'.r')
+y_predict = pipe.predict(X_predict)
 
-    #Diff prediction:
-    axs[1].plot(calibrated_data['time'][-(predict_idx-1):], np.diff(calibrated_data[dset[select]][-predict_idx:]),'-b')
-    axs[1].plot(calibrated_data['time'][-(predict_idx-1):], np.diff(y_predict),'.r')
+n = 3
+fig, axs = plt.subplots(n)
+fig.suptitle(best_model + ' Prediction of ' + dset[select])
+# x4polt = calibrated_data['time']
+x4plot = calibrated_data.index
 
+if n == 3:
+    #Full plot for reference:
+    axs[0].plot(x4plot, calibrated_data[dset[select]],'-b')
+    axs[0].plot(x4plot[:-(predict_idx+1)], pipe.predict(X),'-r')
+    axs[0].set_ylabel('$f$ (MHz)')
 
+#Predicted part:
+axs[n-2].plot(x4plot[-predict_idx:], calibrated_data[dset[select]][-predict_idx:],'-b')
+axs[n-2].plot(x4plot[-predict_idx:], y_predict,'.r')
+axs[n-2].set_ylabel('$f$ (MHz)')
+axs[n-2].set_xticklabels([])
 
-
-
+#Diff prediction:
+axs[n-1].plot(x4plot[-(predict_idx-1):], np.diff(calibrated_data[dset[select]][-predict_idx:]),'-b')
+axs[n-1].plot(x4plot[-(predict_idx-1):], np.diff(y_predict),'.r')
+axs[n-1].set_ylabel('$\Delta f$ (MHz)')
+axs[n-1].set_xlabel('Time (s)')
+fig.autofmt_xdate()
 
 
 
