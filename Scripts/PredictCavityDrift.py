@@ -1,4 +1,3 @@
-#bops: https://www.youtube.com/watch?v=SpnSNPg-giU
 import os
 # import datetime
 # import time
@@ -39,7 +38,7 @@ datadict = {
 avenoise_ai6 = 0.108 #0.10772700000000013
 avenoise_ai7 = 0.014 #0.013732000000000077
 
-# Dates prior to thermistor box sitchover:
+# Dates prior to thermistor box switchover:
 # '20200520', '20200521', '20200522', '20200523', '20200524', '20200525', '20200526', 
 # '20200527', '20200528', '20200529', '20200530', '20200531', '20200601', '20200602',
 # '20200603', '20200604', '20200605', '20200606', '20200607', '20200608', '20200609', 
@@ -130,7 +129,7 @@ else:
 """ ################ """
 """ Clean .LVM Data: """
 """ ################ """
-data = data.sort_values(by=['timestamp']) #<- For now
+data = data.sort_values(by=['timestamp'])
 
 """ Filter out voltage spikes: """
 clean_data = clean.filterSpikes(data.copy(), 'AI7 voltage', 0.051, counterMax=5)
@@ -154,8 +153,8 @@ corrected_data = clean.interpolate_betweenDays(corrected_data.copy())
 
 
 """ Plot data for inspection: """
-clean.plot_monthBYmonth(corrected_data, 'AI7 voltage', print_text=False)
-clean.plot_dayBYday(corrected_data, 'AI7 voltage', zero_reference=False, timeaxis = 'timestamp', print_text=False)
+clean.plot_monthBYmonth(corrected_data, column='AI7 voltage', print_text=False)
+clean.plot_dayBYday(corrected_data, column='AI7 voltage', zero_reference=False, timeaxis = 'timestamp', print_text=False)
 
 
 
@@ -190,7 +189,7 @@ calibrated_data = calibrated_data.drop(['AI6 voltage', 'AI7 voltage'], axis=1)
 
 #%%
 """ Pearson correlate the data: """
-from astropy.table import QTable, Table, Column
+from astropy.table import Table
 to_corr = calibrated_data.infer_objects()  #Correct typing issues
 
 #Get dataframe headers:
@@ -226,6 +225,7 @@ from sklearn.linear_model import Lasso
 from sklearn.svm import SVR
 from sklearn import tree #tree.DecisionTreeRegressor()
 from sklearn.svm import LinearSVC
+from sklearn.neural_network import MLPClassifier
 
 #Feature selection:
 from sklearn.feature_selection import SelectFromModel
@@ -269,6 +269,7 @@ else:
 print('Prediction duration: ',(calibrated_data['time'][-1]-calibrated_data['time'][-predict_idx])/3600, ' h')
 
 
+
 #Take a subset for train-testing:
 dset = ['Cavity Drift (MHz)', 'Delta Drift (MHz)']
 select = 0
@@ -288,8 +289,6 @@ X = X[:-predict_idx]
 y = y[:-predict_idx]
 
 
-
-
 #Choose a few models to fit the data with:
 models = [('Linear Regression', LinearRegression()),
           ('Ridge Regression', Ridge()),
@@ -300,10 +299,11 @@ models = [('Linear Regression', LinearRegression()),
           # ('MSE DecisionTreeRegressor', tree.DecisionTreeRegressor())
 scores = []
 
-itt = 100
+n_cross_validations = 1
 for model in models:
     average_score = []
-    for i in range(itt):
+    #Cross validations:
+    for i in range(n_cross_validations):
         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2)#, random_state=23)
         pipe = Pipeline([('scaler', StandardScaler()), model])
     
@@ -328,19 +328,25 @@ pipe.fit(X_train, y_train)
 
 
 
+
+
+""" Make a plot of the fit: """
 y_predict = pipe.predict(X_predict)
 
 n = 3
 fig, axs = plt.subplots(n)
-fig.suptitle(best_model + ' Prediction of ' + dset[select])
+fig.suptitle(best_model + ' Prediction of ' + dset[select][:-6])
 # x4polt = calibrated_data['time']
 x4plot = calibrated_data.index
 
 if n == 3:
     #Full plot for reference:
-    axs[0].plot(x4plot, calibrated_data[dset[select]],'-b')
-    axs[0].plot(x4plot[:-(predict_idx+1)], pipe.predict(X),'-r')
-    axs[0].set_ylabel('$f$ (MHz)')
+    # axs[0].plot(x4plot, calibrated_data[dset[select]],'-b')
+    # axs[0].plot(x4plot[:-(predict_idx+1)], pipe.predict(X),'-r')
+    # axs[0].set_ylabel('$f$ (MHz)')
+    axs[0].plot(x4plot[:-(predict_idx+1)], np.ones_like(x4plot[:-(predict_idx+1)],dtype='int'),'-g')
+    axs[0].plot(x4plot[:-(predict_idx+1)], calibrated_data[dset[select]][:-(predict_idx+1)]-pipe.predict(X),'.k')
+    axs[0].set_ylabel('Error (MHz)')
 
 #Predicted part:
 axs[n-2].plot(x4plot[-predict_idx:], calibrated_data[dset[select]][-predict_idx:],'-b')

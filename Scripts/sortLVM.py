@@ -1,29 +1,17 @@
-#bop: https://www.youtube.com/watch?v=kOQzKu_qTQo
+"""
+A set of functions designed to take the data stored in the lvm files that the
+Single Atom Lab LabVIEW Interface (SALLI) generates and store it into a 
+pandas dataframe.
+
+@author: Rhys Hobbs
+"""
 import os
 import datetime
 import time
-from pathlib import Path
 from scipy.signal import savgol_filter
 
 import pandas as pd
 import numpy as np
-
-import time
-
-"""
-    Pretend passed variables:
-"""
-# #Function inputs:
-# basepath = 'D:\\LabUser\\Documents\\Python Scripts\\Cavity Temperature Data\\'
-# searchtype = 'between' #'specific'
-
-# folders = []
-# for (dirpath, dirnames, filenames) in os.walk(basepath):
-#     pos = dirpath.rfind('\\') + 1
-#     folders.append(dirpath[pos:])
-#     print(dirpath[pos:])
-# folders = folders[1:]
-
 
 
 def sortLVMdata( basepath, folders, **kwargs ):
@@ -214,7 +202,7 @@ def sortLVMdata( basepath, folders, **kwargs ):
             
             
         # #Smooth the data if smooth request was called:
-        if smoothtype is not '':
+        if smoothtype != '':
             AMdata = applySmoothing(AMdata, 'AI6 voltage', smoothtype)
             FMdata = applySmoothing(FMdata, 'AI7 voltage', smoothtype)
         
@@ -234,7 +222,7 @@ def sortLVMdata( basepath, folders, **kwargs ):
         
         
         """ Trim data to have one data point per t_0 seconds: """        
-        if temppath is '':
+        if temppath == '':
             #Check the actaul sampling rate in the data against our desired sampling rate ('SAMP_PERIOD'):
             datastepsize = np.mean( AMdata['timestamp'].diff() ).total_seconds()
             step_size = int(np.round(SAMP_PERIOD/datastepsize))
@@ -283,7 +271,7 @@ def sortLVMdata( basepath, folders, **kwargs ):
         FMdata = FMdata.iloc[keep_index]
         
         #Append geotemp if it was created:
-        if temppath is not '':
+        if temppath != '':
             AMdata['AirTC_Avg'] = geotemp
             
  
@@ -291,7 +279,7 @@ def sortLVMdata( basepath, folders, **kwargs ):
         """ Append data to the 'data' dataframe: """
         AMdata['AI7 voltage'] = FMdata['AI7 voltage']
         
-        if temppath is '':
+        if temppath == '':
             AMdata = AMdata[['time', 'timestamp', 'AI6 voltage', 'AI7 voltage']]
         else:
             AMdata = AMdata[['time', 'timestamp', 'AI6 voltage', 'AI7 voltage', 'AirTC_Avg']]

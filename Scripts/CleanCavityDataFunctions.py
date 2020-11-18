@@ -1,19 +1,13 @@
 """
-Python colon notation:
-A Python sequence slice addresses can be written as 
-a[start:end:step] and any of start, stop or end can be dropped. 
-Thus, a[::3] is every third element of the sequence/list.  
+A set of functions designed to clean and plot cavity drift data obtained from 
+the 1 GHz optical cavity.
+
+@author: Rhys Hobbs
 """
-# #[print(i) for i in list] #iterates over each element in list and prints it
-# # For example:
-# #Call subdirectories:
-# subdirs = [x[0] for x in os.walk('.')]
-# print(subdirs)
 
 #Temperature Drift: AMCavityDrift.lvm   <->    AI6 voltage
 #Frequency Drift:   FMCavityDrift.lvm   <->    AI7 voltage
 
-#bop: https://www.youtube.com/watch?v=kOQzKu_qTQo
 import os
 import datetime
 import time
@@ -24,7 +18,6 @@ from scipy.signal import savgol_filter
 from scipy import stats
 import matplotlib.pyplot as plt
 
-from sklearn.linear_model import LinearRegression
 
 
 
@@ -32,12 +25,26 @@ from sklearn.linear_model import LinearRegression
 """ *************************************************** """
 """ Filter short spikes (timewise) & set values to Nan: """
 """ *************************************************** """
-def filterSpikes(data, col2filt, threshold, **kwargs):
-    #threshold: Defines the voltage noise level. 
-    #           Anything above this noise level is considered a sudden jump.
+def filterSpikes(data, col2filt, threshold, counterMax=100):
+    """ 
+    A function to remove voltage (frequency) jumps from the data stored in the
+    the dataframe column col2filt.
     
-    #Define kwargs:
-    conterMax = kwargs.get('counterMax',100)
+    Parameters:
+    -----------
+    data : dataframe
+        Dataframe in which slow spikes will be removed from.
+        
+    col2filt : str
+        Signal to check for a slow spike via pearson test.
+    
+    threshold : float
+        The cut off threshold for determining the the difference between noise 
+        and voltage jump.
+    
+    counterMax : int
+        Number of times to repeat the filter (defaults to 100)
+    """
     
     #Begin function:
     testframe = data.copy()
@@ -46,7 +53,7 @@ def filterSpikes(data, col2filt, threshold, **kwargs):
     while catch != True:
         # Limit loop number:
         counter += 1
-        if counter == conterMax:
+        if counter == counterMax:
             catch = True
         
         # Find rows in which a spike occurs:
@@ -70,48 +77,73 @@ def filterSpikes(data, col2filt, threshold, **kwargs):
 """ ***************************************** """
 """ Finer grade of filter for removing spikes """
 """ ***************************************** """
-def finefilter(data, col2filt, Nthresh, **kwargs):
-    #Nthresh: Defines the minimum number of points in which a seperation of 
-    #         points is considered a jump of nans.
+def finefilter(data, col2filt, Nthresh, n_loops=10,
+               cutoff=0.1, width=10, xaxis='time'):
+    """ 
+    This function applies a voltage spike filter of iner grade than 
+    filterSpikes to the data:
     
-    ## kwargs:
-    # cutoff:    (float) Cutoff for when the pearson coeff of the voltage 
-    #            signal is too steep. Default: 0.7.
-    # width:     (int) Number of points to use in the pearson correlation.
-    #            Default: 10.
-    # xaxis:     (str) Alternative axis to correlate the voltage data with.
-    #            Default: 'time'.
-    
-    #Define kwargs:
-    cutoff = kwargs.get('cutoff', 0.1) #pearson: 0.7, slope: 0.1
-    width = kwargs.get('width', 10)   
-    xaxis = kwargs.get('xaxis','time') 
-    loops = kwargs.get('loops',1) 
-    
-    def checkSlope(dataframe, column, edgesindex, side, **kwargs):
-        # This function calculates the slope of a set of 
-        # points on either side of a reference point. If the slope
-        # is steeper than desired it sets the set of points to nan inside the
-        # dataframe.
-        #
-        # dataframe:  (Dataframe) Dataframe in which slow spikes will be removed from.
-        # column:     (str) Voltage signal to check for a slow spike via pearson test.
-        # edgesindex: (int) A list of indices that we will check on either the left or 
-        #             right side of (in the dataframe) for a steep slope.
-        # side:       (str) Which side of the index to check
-        #
-        ## kwargs:
-        # cutoff:    (float) Cutoff for when the pearson coeff of the voltage 
-        #            signal is too steep. Default: 0.7.
-        # width:     (int) Number of points to use in the pearson correlation.
-        #            Default: 10.
-        # xaxis:     (str) Alternative axis to correlate the voltage data with.
-        #            Default: 'time'.
+    Parameters:
+    -----------
+    data : dataframe
+        Dataframe in which slow spikes will be removed from.
         
-        #Define kwargs:
-        cutoff = kwargs.get('cutoff', 0.1) #pearson: 0.7, slope: 0.1
-        width = kwargs.get('width', 10)   
-        xaxis = kwargs.get('xaxis','time') 
+    col2filt : str
+        Signal to check for a slow spike via pearson test.
+    
+    Nthresh : 
+        Defines the minimum number of points in which a seperation of points 
+        is considered a jump of nans.
+        
+    n_loops : int
+        The number of times to perform the filter over the data. Defaults to
+        10.
+        
+    cutoff : float
+        Cutoff for when the pearson coeff of the voltage signal is too 
+        steep. Defaults to 0.1.
+        
+    width : int
+         Number of points to use in the pearson correlation. Defaults to 10
+        
+    xaxis : str
+        Alternative axis to correlate the voltage data with. The default 
+        is 'time'
+    """
+    
+    def checkSlope(dataframe, column, edgesindex, side, 
+                   cutoff=0.1, width=10, xaxis='time'):
+        """ 
+        This function calculates the slope of a set of points on either 
+        side of a reference point. If the slope is steeper than desired 
+        it sets the set of points to nan inside the dataframe.      
+        
+        Parameters:
+        -----------
+        dataframe : dataframe
+            Dataframe in which slow spikes will be removed from.
+            
+        column : str
+            Signal to check for a slow spike via pearson test.
+        
+        edgesindex : int
+            A list of indices that we will check on either the left or 
+            right side of (in the dataframe) for a steep slope.
+        
+        side : float
+            Which side of the index to check.
+            
+        cutoff : float
+            Cutoff for when the pearson coeff of the voltage signal is too 
+            steep. Defaults to 0.1.
+            
+        width : int
+             Number of points to use in the pearson correlation. Defaults to 10
+            
+        xaxis : str
+            Alternative axis to correlate the voltage data with. The default 
+            is 'time'
+        """
         
         #Quick fixes:
         cutoff = np.abs(cutoff)
@@ -126,14 +158,8 @@ def finefilter(data, col2filt, Nthresh, **kwargs):
             else:
                 start = edge
                 end = edge+width
-                
-            # # Pearson correlation coeff:
-            # r = dataframe.iloc[start:end]
-            # r = r.infer_objects()  #Correct typing issues
-            # r = r[col2filt].corr(r['time'], method='pearson')
-            # print(r, edge, col2filt)
-                
-            # Computing slope instead of pearson's r
+
+            # Computing gradient:
             r = dataframe.iloc[start:end]
             rise = r[col2filt].diff() * 1000
             run = r[xaxis].diff()
@@ -148,18 +174,20 @@ def finefilter(data, col2filt, Nthresh, **kwargs):
     #************
     testframe = data.copy()
     
-    while loops > 0:
-        print('Loop N: ' + str(loops) + '. Filter width of ' + str(width) + ' points.')
+    while n_loops > 0:
+        print('Loop N: ' + str(n_loops) + '. Filter width of ' + str(width) + ' points.')
         
         """ Find nan jumps based on dIndex """
         df = testframe[col2filt].notna()
         index = (df.loc[df]).index
         index = np.array(index.tolist()) #index numbers of non-na values
         
-        index2 = np.diff(index) > Nthresh     #Check for # jumps greater than Nthresh
+        #Check for the number of jumps greater than Nthresh:
+        index2 = np.diff(index) > Nthresh     
         index2 = index2.tolist()
         index2 = np.array( [False] + index2 )
-        leftedges_idx = index[index2]               #Get the index number of the point after the jump
+        #Get the index number of the point after the jump:
+        leftedges_idx = index[index2]               
         
         
         """ Find flipped nan jumps based on dIndex """
@@ -174,7 +202,7 @@ def finefilter(data, col2filt, Nthresh, **kwargs):
         
         """ Prep for next loop: """
         width = width*2
-        loops -= 1
+        n_loops -= 1
        
     
     return testframe
@@ -184,10 +212,26 @@ def finefilter(data, col2filt, Nthresh, **kwargs):
 """ *************** """
 """ Moving average: """
 """ *************** """
-# Uses a moving average to calculate the average slope across a set of points.
-# If the slope is larger than X, then the points are removed.
-def movingFilter(dataframe, col2filt, width=10, threshold=1):
+# 
+def movingFilter(dataframe, col2filt, width=10, threshold=1.0):
+    """ 
+    Uses a moving average to calculate the average slope across a set of 
+    points. If the slope is larger than X, then the points are removed.      
+        
+    Parameters:
+    -----------
+    dataframe : dataframe
+        The data frame containing the data you would like to clean.
+        
+    col2filt : str
+        The dataframe column to apply the filter to.
     
+    width : int
+        Width of the moving window. Default is 10 points.
+    
+    threshold : float
+        Voltage spike threshold. Default is 1.0 V.
+    """
     testframe = dataframe.copy()
     
     #Get index numbers of all non-nan elements:
@@ -213,63 +257,6 @@ def movingFilter(dataframe, col2filt, width=10, threshold=1):
     return dataframe
 
 
-#%% Function:
-# """ ********************************** """
-# """ Check slope of inital region...: """
-# """ ********************************** """
-''' DEPRECIATED '''
-# """ ATTENTION!!! THIS FUNCTION IS MESSING WITH THE DATA IN UNFORSEEN WAYS! """
-
-# def checkstart(dataframe, col2filt, threshold, **kwargs):
-    
-#     #Define kwargs:
-#     cutoffs = kwargs.get('cutoffs', [0.003, 1]) #pearson: 0.7, slope: 0.1
-    
-#     testframe = dataframe.copy()
-    
-#     #Find the index of the data point before the first dramatic voltage jump:
-#     df = testframe[col2filt].notna()
-#     df = testframe.loc[df]
-#     df = df.diff()
-#     df = df.shift(periods=-1) #Shift values for next line. This ensures the Trues will correspond to the point before the jump
-#     spikebool =  (df[col2filt].abs() > threshold)
-#     spikeindex = df[ spikebool ].index
-    
-    
-#     #Apply a linear fit to determine the slope:
-#     #Following: https://realpython.com/linear-regression-in-python/#:~:text=Simple%20or%20single%2Dvariate%20linear,independent%20variable%2C%20%F0%9D%90%B1%20%3D%20%F0%9D%91%A5.&text=When%20implementing%20simple%20linear%20regression,These%20pairs%20are%20your%20observations.
-#     #We need to get our x & y numpy arrays in the shape:
-#     # x.shape -> (6,1), and y.shape -> (6, )
-    
-#     if not spikeindex.empty:
-#         y = testframe[col2filt].iloc[0:spikeindex[0]-1]
-#         bools = y.notna()
-#         y = y.loc[bools] * 100
-#         x = y.index
-#         x = np.array(x).reshape((-1,1))
-        
-#         # Applying a Savitzky-Golay filter to the y data:
-#         yhat = savgol_filter(y, 51, 3) # window size 51, polynomial order 3
-#         yhat = np.array(yhat)
-        
-#         #Get standard delta y as a second measure:
-#         rise = np.mean(yhat[-10:]) - np.mean(yhat[:10])
-#         run  = np.mean(x[-10:]) - np.mean(x[:10])
-        
-#         #Create a linear regression object and call the fit method:
-#         model = LinearRegression()
-#         model = model.fit(x,yhat)
-#         slope = model.coef_
-#         # print(slope, cutoffs[0], slope < cutoffs[0])
-#         # print(rise, cutoffs[1], rise < cutoffs[1])
-        
-#         if slope < cutoffs[0] and rise < cutoffs[1]:
-#             print('Flat slope found. Removing [' + str(0) + ':' + str(spikeindex[0]-1) + '] in ' + col2filt)
-#             testframe[col2filt].iloc[ 0:spikeindex[0]+1 ] = np.nan
-#     else:
-#         print('No dramatic voltage jumps to be found! :D')
-        
-#     return testframe
 
 
 #%% Function:
@@ -277,6 +264,16 @@ def movingFilter(dataframe, col2filt, width=10, threshold=1):
 """ Remove Nans from the dataframe: """
 """ ******************************* """
 def clearNaNs(dataframe):
+    """ 
+    Remove all rows where there is a nan in either 'AI6 voltage' or 
+    'AI7 voltage':         
+    
+    Parameters:
+    -----------
+    dataframe : dataframe
+        The data frame containing the AI7 voltage cavity drift data you 
+        would like to clean.
+    """
     is_NaN = dataframe.isnull()  #isnull()
     is_NaN = is_NaN['AI6 voltage'] | is_NaN['AI7 voltage']
 
@@ -294,69 +291,106 @@ def clearNaNs(dataframe):
 
 """ ATTENTION!!! THIS FUNCTION IS MESSING WITH THE DATA IN UNFORSEEN WAYS! """
 
-# I want to try characterising the noise on each signal by isolating the noise 
-# and calculating its mean and standard deviation. To do this I would like to 
-# create a smoothed variant of the data and subtracting it from the real data.
-# Assuming the data has been sufficiently cleaned already this should be able 
-# to isolate the general trend of the data quite well.
-#     The over aching idea is that if I can characterise the noise, then I can 
-# use the smoothed data and the noise for the machine learning seperately.
-def charNoise(dataframe, Nsmooths=10, window_width=100):
+def charNoise(dataframe, Nsmooths=1, window_width=100):
+    """ 
+    Characterise the noise in the cavity data:         
     
+    Parameters:
+    -----------
+    dataframe : dataframe
+        The data frame containing the AI6 & AI7 voltage cavity drift data you 
+        would like to clean.
+
+    Nsmooths : int
+        Threshold used to determine if a voltage jump in the cavity
+        drift monitoring data caused by adjusting the cavity AOM's 
+        alignment has occured.
+
+    window_width : int
+        Threshold 
+
+
+    Overview:
+    -----------
+    I want to try characterising the noise on each signal by isolating the noise 
+    and calculating its mean and standard deviation. To do this I would like to 
+    create a smoothed variant of the data and subtracting it from the real data.
+    Assuming the data has been sufficiently cleaned already this should be able 
+    to isolate the general trend of the data quite well.
+        The over aching idea is that if I can characterise the noise, then I can 
+    use the smoothed data and the noise for the machine learning seperately.
+    """
     noiseframe  = dataframe.copy()
     smoothframe = dataframe.copy()
     
-    # #Get index numbers of all non-nan elements:
-    # not_NaN = testframe.notnull()
-    # not_NaN = not_NaN[col2filt]
-    # not_NaN = dataframe[not_NaN].index
-    
-    #Smooth:
-    tempframe = noiseframe.rolling(window_width, win_type='boxcar').mean()
-    tempframe2 = tempframe.rolling(window_width, win_type='boxcar').mean()
-    tempframe2 = tempframe2.rolling(window_width, win_type='boxcar').mean()
-    # for i in range(Nsmooths-1):
-    #     smoothframe = smoothframe.rolling(window_width, win_type='boxcar').sum()
+    #Smoothing:
+    if Nsmooths < 1:
+        Nsmooths = 1
+        
+    smoothframe = noiseframe.rolling(window_width, win_type='boxcar').mean()
+    for i in range(Nsmooths):
+        smoothframe['AI6 voltage'] = smoothframe['AI6 voltage'].rolling(window_width, win_type='boxcar').mean()
+        smoothframe['AI7 voltage'] = smoothframe['AI7 voltage'].rolling(window_width, win_type='boxcar').mean()
     
     #noise:
-    noiseframe['AI6 voltage']  = tempframe2['AI6 voltage'] - tempframe2['AI6 voltage']
-    noiseframe['AI7 voltage']  = noiseframe['AI7 voltage'] - tempframe['AI7 voltage']
-    
-    smoothframe['AI6 voltage'] = tempframe2['AI6 voltage']
-    smoothframe['AI7 voltage'] = tempframe['AI7 voltage']
+    noiseframe['AI6 voltage']  = smoothframe['AI6 voltage'] - dataframe['AI6 voltage']
+    noiseframe['AI7 voltage']  = smoothframe['AI7 voltage'] - dataframe['AI7 voltage']
     
     return smoothframe, noiseframe
 
 
+
 #%% Function:
-""" ***************** """
-""" Interpolation:    """
-""" ***************** """
-def interpolate(dataframe, avenoise_ai7, sample_period = 600, threshold = [3e-07, 0.1]):
-    newframe = interpolate_dayBYday(dataframe, avenoise_ai7, sample_period = sample_period)
-    return interpolate_betweenDays(newframe, threshold = threshold)
-    
 """ ************************** """
 """ Day-by-day interpolations: """
 """ ************************** """
-def interpolate_dayBYday(dataframe, avenoise_ai7, sample_period = 600, print_text=True):
-    """ Interpolation (day-by-day): """
-    """ The goal of this code is to load up a day of data and look for any voltage 
-        jumps that occur. We do this day by day first because the jumps should be 
-        much smaller within a single day than across several.
-        During each day we search for a jump. If one is present we find it's index 
-        and generate a straight line interpolation on either side of the data. 
-        We then assume that both lines should cross at the time midpoint between them. 
-        Based on this assumption we calculate how much the either side of the data 
-        needs to be shifted. 
-             To determine which side needs to be shifted we fit a line to the
-        full data set and check which side is furtherest away from this 
-        reference line.
-        [Major assumptions: 1) the left side is correct
-                            2) the drift is linear for short durations
-                            3) the majority of the data is already correct]
+def interpolate_dayBYday(dataframe, noise_level, 
+                         sample_period = 600, channel='AI7 voltage',
+                         print_text=True):
+    """ 
+    Interpolation (day-by-day):         
+    
+    Parameters:
+    -----------
+    dataframe : dataframe
+        The data frame containing the AI7 voltage cavity drift data you 
+        would like to clean.
+
+    noise_level : float
+        Threshold used to determine if a voltage jump in the cavity
+        drift monitoring data caused by adjusting the cavity AOM's 
+        alignment has occured.
+        
+    sample_period : int
+        Used to define the adjusted speration between voltage jumps
+        if no line fit is carried out.
+    
+    channel : str
+        The channel to apply the interpolation function to. Defaults to 
+        'AI7 voltage' because this is what I hard coded into the Single Atom 
+        Lab LabVIEW Interface (SALLI).
+
+    print_text : boolean
+        Enables interpolation update information
+
+
+    Overview:
+    -----------
+    The goal of this code is to load up a day of data and look for any voltage 
+    jumps that occur. We do this day by day first because the jumps should be 
+    much smaller within a single day than across several.
+    During each day we search for a jump. If one is present we find it's index 
+    and generate a straight line interpolation on either side of the data. 
+    We then assume that both lines should cross at the time midpoint between them. 
+    Based on this assumption we calculate how much the either side of the data 
+    needs to be shifted. 
+         To determine which side needs to be shifted we fit a line to the
+    full data set and check which side is furtherest away from this 
+    reference line.
+    [Major assumptions: 1) the left side is correct
+                        2) the drift is linear for short durations
+                        3) the majority of the data is already correct]
     """
-    # from scipy import stats
     #Count the number of days present in the data:
     day_idx = dataframe['timestamp'] - dataframe['timestamp'][0]
     day_idx = [timestamp.days for timestamp in day_idx]
@@ -374,18 +408,17 @@ def interpolate_dayBYday(dataframe, avenoise_ai7, sample_period = 600, print_tex
         
         #Fit a reference line to the data:
         x = tempframe['time']
-        y = tempframe['AI7 voltage']
+        y = tempframe[channel]
         ref_slope, ref_intercept, r_value, p_value, std_err = stats.linregress(x,y)
         
         #Look for voltage jumps in to-day's data and shift the data accordingly until no more jumps exist:
         anyjump = True
         while anyjump:
             #Look for a voltage jump:
-            jump = np.abs(tempframe['AI7 voltage'].diff()) > avenoise_ai7
+            jump = np.abs(tempframe[channel].diff()) > noise_level
             anyjump = jump.any()
             if print_text:
                 print('Jumps remaining: ', len([i for i in jump if i]))
-            
             #If a jump exists, interpolate:
             if anyjump:
                 jump_idx = [i for i in range(len(jump)) if jump.iloc[i]]
@@ -401,7 +434,7 @@ def interpolate_dayBYday(dataframe, avenoise_ai7, sample_period = 600, print_tex
                 
                 #Fit a line to the left data:
                 x = tempframe['time'].iloc[:start_idx]
-                y = tempframe['AI7 voltage'].iloc[:start_idx]
+                y = tempframe[channel].iloc[:start_idx]
                 left_slope, left_intercept, r_value, p_value, std_err = stats.linregress(x,y)
     
                 #Check if there is enough data on the right for a good fit:
@@ -410,7 +443,7 @@ def interpolate_dayBYday(dataframe, avenoise_ai7, sample_period = 600, print_tex
                         print('Performing full interpolation')
                     #Fit a line to the right data:
                     x = tempframe['time'].iloc[start_idx:end_idx]
-                    y = tempframe['AI7 voltage'].iloc[start_idx:end_idx]
+                    y = tempframe[channel].iloc[start_idx:end_idx]
                     right_slope, right_intercept, r_value, p_value, std_err = stats.linregress(x,y)
                     
                     t_midpoint = (tempframe['time'].iloc[start_idx] + tempframe['time'].iloc[start_idx-1])/2
@@ -427,19 +460,19 @@ def interpolate_dayBYday(dataframe, avenoise_ai7, sample_period = 600, print_tex
                     if print_text:
                         print('Performing no interpolation')
                     #Just use 0.95 of the natural offset:
-                    offset = tempframe['AI7 voltage'].iloc[start_idx-1] - tempframe['AI7 voltage'].iloc[end_idx-1]
+                    offset = tempframe[channel].iloc[start_idx-1] - tempframe[channel].iloc[end_idx-1]
                     gap = np.abs(tempframe['time'].iloc[start_idx-1] - tempframe['time'].iloc[end_idx-1])/sample_period
                     offset = (0.95**gap)*offset
                     
                 #Check which side of the data needs to be shifted:
-                left_2_ref = tempframe['AI7 voltage'].iloc[start_idx-1] - (ref_slope*tempframe['time'].iloc[start_idx-1] + ref_intercept)
-                right_2_ref = tempframe['AI7 voltage'].iloc[end_idx-1] - (ref_slope*tempframe['time'].iloc[end_idx-1] + ref_intercept)
+                left_2_ref = tempframe[channel].iloc[start_idx-1] - (ref_slope*tempframe['time'].iloc[start_idx-1] + ref_intercept)
+                right_2_ref = tempframe[channel].iloc[end_idx-1] - (ref_slope*tempframe['time'].iloc[end_idx-1] + ref_intercept)
                 if np.abs(left_2_ref) > np.abs(right_2_ref):
                     #Add the offset to the data:
-                    tempframe['AI7 voltage'].iloc[:start_idx] = tempframe['AI7 voltage'].iloc[:start_idx] - offset
+                    tempframe[channel].iloc[:start_idx] = tempframe[channel].iloc[:start_idx] - offset
                 else:
                     #Add the offset to the data:
-                    tempframe['AI7 voltage'].iloc[start_idx:] = tempframe['AI7 voltage'].iloc[start_idx:] + offset
+                    tempframe[channel].iloc[start_idx:] = tempframe[channel].iloc[start_idx:] + offset
             
         #Update the dataframe before moving to the next day:
         workingframe[boo] = tempframe
@@ -450,23 +483,45 @@ def interpolate_dayBYday(dataframe, avenoise_ai7, sample_period = 600, print_tex
 """ ****************************** """
 """ Interpolation between days:    """
 """ ****************************** """
-def interpolate_betweenDays(dataframe, threshold = [3e-07, 0.1]):
-    """ Interpolation (between days): """
-    #   threshold = [voltage gradient, voltage jump]
-    """ The goal of this code is to load up and look at the voltage changes 
-        between each day's data. If the voltage jump and slope are greater
-        than the thresholds set in threshold then the data prior to said jump 
-        is shifted by the voltage difference. 
-        [Major assumptions: 1) the left side is in the correct position
-                            2) the drift is linear for short durations
-                            3) the majority of the data is already correct]
-         
-        NOTE:
-        You will run into index errors in this function if the dataframe has
-        any nan's in it. So you should run the function clearNaNs prior to
-        use.
+def interpolate_betweenDays(dataframe, threshold = [3e-07, 0.1], channel='AI7 voltage'):
+    """ 
+    Interpolation (between days): 
+    
+    Parameters:
+    -----------
+    dataframe : dataframe
+        The data frame containing the AI7 voltage cavity drift data you would 
+        like to clean.
+
+    threshold : float (list of length 2)
+        Thresholds used to determine if there is a voltage jump in the cavity
+        drift monitoring data caused by adjusting the cavity AOM's alignment. 
+        The first value defines the maximum gradient between days before the 
+        gap is seen as a voltage jump. Likewise the second value sets the 
+        maximum change in voltage between days before the gap is seen as a 
+        voltage jump.
+    
+    channel : str
+        The channel to apply the interpolation function to. Defaults to 
+        'AI7 voltage' because this is what I hard coded into the Single Atom 
+        Lab LabVIEW Interface (SALLI).
+
+
+    Overview:
+    -----------
+    The goal of this code is to load up and look at the voltage changes 
+    between each day's data. If the voltage jump and slope are greater
+    than the thresholds set in threshold then the data prior to said jump 
+    is shifted by the voltage difference. 
+    [Major assumptions: 1) the left side is in the correct position
+                        2) the drift is linear for short durations
+                        3) the majority of the data is already correct]
+     
+    NOTE:
+    Because of assumption 3, you will run into index errors in this 
+    function if the dataframe has any nan's in it. For this reason you 
+    should run the function clearNaNs prior to use.
     """
-    # from scipy import stats
     #Count the number of days present in the data:
     day_idx = dataframe['timestamp'] - dataframe['timestamp'][0]
     day_idx = [timestamp.days for timestamp in day_idx]
@@ -477,15 +532,14 @@ def interpolate_betweenDays(dataframe, threshold = [3e-07, 0.1]):
     # #Loop through each day to get max values:
     v_max = []
     t_loc = []
-    for day in N_days: #day = 49
-        # print('Day: ', day)
+    for day in N_days:
         #Start by calling data corresponding to-day:  xD
         boo = [day == idx for idx in day_idx]
         tempframe = workingframe[boo]
         
         #Find the maximum voltage:
-        maxx = tempframe['AI7 voltage'].max()
-        loc = [i for i in range(len(tempframe)) if tempframe['AI7 voltage'].iloc[i] == maxx]
+        maxx = tempframe[channel].max()
+        loc = [i for i in range(len(tempframe)) if tempframe[channel].iloc[i] == maxx]
         
         #Append the maximum values within a a day's set of data:
         v_max.append(maxx)
@@ -506,15 +560,60 @@ def interpolate_betweenDays(dataframe, threshold = [3e-07, 0.1]):
         #Check gradient & voltage jump against user defined thresholds:
         if (np.abs(gradients[di]) > threshold[0]) and (np.abs(jumps[di]) > threshold[1]):
             #Get data shift:
-            offset = jumps[di] - ((time_shift[di]/88000) * 0.0027) #0.0027442139999999996 is the average of points which I eye balled as not needing a shift
+            offset = jumps[di] - ((time_shift[di]/88000) * 0.0027) #0.0027442139999999996 is the average of points which I eyeballed as not needing a shift
             
             #Shift ze data!
-            workingframe['AI7 voltage'][boo] = tempframe['AI7 voltage'] + offset
+            workingframe[channel][boo] = tempframe[channel] + offset
     
     return workingframe
 
 
+""" ***************** """
+""" Interpolation:    """
+""" ***************** """
+def interpolate(dataframe, noise_level, 
+                threshold = [3e-07, 0.1], channel='AI7 voltage',
+                sample_period = 600, print_text=True):
+    """ 
+    Run the below interpolation functions:
+    
+    Parameters:
+    -----------
+    dataframe : dataframe
+        The data frame containing the AI7 voltage cavity drift data you 
+        would like to clean.
 
+    noise_level : float
+        Threshold used to determine if a voltage jump in the cavity
+        drift monitoring data caused by adjusting the cavity AOM's 
+        alignment has occured.
+        
+    sample_period : int
+        Used to define the adjusted speration between voltage jumps
+        if no line fit is carried out.
+    
+    threshold : float (list of length 2)
+        Thresholds used to determine if there is a voltage jump in the cavity
+        drift monitoring data caused by adjusting the cavity AOM's alignment. 
+        The first value defines the maximum gradient between days before the 
+        gap is seen as a voltage jump. Likewise the second value sets the 
+        maximum change in voltage between days before the gap is seen as a 
+        voltage jump.
+    
+    channel : str
+        The channel to apply the interpolation function to. Defaults to 
+        'AI7 voltage' because this is what I hard coded into the Single Atom 
+        Lab LabVIEW Interface (SALLI).
+
+    print_text : boolean
+        Enables interpolation update information
+    """
+    newframe = clearNaNs(dataframe)
+    newframe = interpolate_dayBYday(newframe.copy(), noise_level, 
+                                    sample_period = sample_period, print_text=print_text)
+    newframe = interpolate_betweenDays(newframe.copy(), threshold = threshold, channel=channel)
+    return newframe
+    
 
 
 
@@ -524,17 +623,27 @@ def interpolate_betweenDays(dataframe, threshold = [3e-07, 0.1]):
 """ ******************* """
 """ Apply calibrations: """
 """ ******************* """
-def calibrate(dataframe, remove_old_columns=False, **kwargs):
-    # This function can be used to calibrate the data contained in the dataframe.
-    # However, there's not much point prior to the machine learning script as
-    # the data will need to be z-scored anyway.
+def calibrate(dataframe, remove_old_columns=False):
+    """ 
+    This function can be used to calibrate the data contained in the dataframe.
+    Once calibrated said data will be added to the dataframe under the column
+    names: 'Lab T (C)' & 'Cavity Drift (MHz)'
+    
+    Parameters:
+    -----------
+    dataframe : dataframe
+        The data frame containing the 'AI6 voltage' and 'AI7 voltage' cavity 
+        drift data.
+
+    remove_old_columns : boolean
+        Indicates whether or not the function drops the uncalibrated data from
+        the dataframe. Defaults to False.
+    """
 
     #dataframe = dataframe.rename(columns={'AI6 voltage': 'cavity temp', 'cavity frequency': 'c'})
     cavTemp  = 'AI6 voltage'
     cavDrift = 'AI7 voltage'
     
-    ## Marvin's calibrations after smoothing data:
-    ##  cavity_V <-> FM   &     cavity_T2  <-> AM  
     """ Calibration Constants: """
     WavemeterTiSapph = 377.00109 #THz
     Wavemeter780     = 384.22818 #THz
@@ -592,15 +701,33 @@ def calibrate(dataframe, remove_old_columns=False, **kwargs):
 """ ********************************** """
 """ Plotting data, month-by-month:     """
 """ ********************************** """
-def plot_monthBYmonth(dataframe, column, fixcolour=False, print_text=True):
+def plot_monthBYmonth(dataframe, column='AI7 voltage', fixcolour=False, print_text=True):
+    """ 
+    Plots the cavity drift from each day into month wise subplots.
+    
+    Parameters:
+    -----------
+    dataframe : dataframe
+        The data frame containing the data you would like to plot.
+        
+    column : str
+        The name of the dataframe column you would like to plot. Defaults to 
+        'AI7 voltage'.
+
+    fixcolour : boolean
+        Forces all lines to span the full colour range in the rainbow_gradient
+        function. Defaults to False.
+
+    print_text : boolean
+        Indicates whether or not the user would like updates from the function.
+        Defaults to True.
+    """
     day_idx = dataframe['timestamp'] - dataframe['timestamp'][0]
     day_idx = [timestamp.days for timestamp in day_idx]
     month_idx = [(12*(dataframe['timestamp'][i].year - dataframe['timestamp'][0].year)) + (dataframe['timestamp'][i].month - dataframe['timestamp'][0].month) for i in range(len(dataframe['timestamp']))]
     months = list(set(month_idx))
     
-    #N_days   = len(list(set(day_idx))) #<- use set to remove duplicates from list (loses ordering)
     N_months = len(months)
-    N_figs = int(np.ceil(np.sqrt(N_months)))
     rainbow = rainbow_gradient(31)
     
     #Define number of subplots in figure:
@@ -695,9 +822,36 @@ def plot_monthBYmonth(dataframe, column, fixcolour=False, print_text=True):
 """ ********************************** """
 """ Plotting data, day-by-day:         """
 """ ********************************** """
-def plot_dayBYday(dataframe, column, line_type='-', 
+def plot_dayBYday(dataframe, column='AI7 voltage', line_type='-', 
                   zero_reference = True, timeaxis = 'time',
                   print_text=True):
+    """ 
+    Plots all the cavity drift day in a single plot, highlighting each 
+    individual day with a different colour.
+    
+    Parameters:
+    -----------
+    dataframe : dataframe
+        The data frame containing the data you would like to plot.
+        
+    column : str
+        The name of the dataframe column you would like to plot. Defaults to 
+        'AI7 voltage'.
+
+    line_type : str
+        The line type to be used in the plot. Defaults to '-'.
+
+    zero_reference : boolean
+        Add an offset to reference the first data point to zero. Defaults to 
+        True.
+
+    timeaxis : str
+        The label of the dataframe column to use as the xaxis.
+
+    print_text : boolean
+        Indicates whether or not the user would like updates from the function.
+        Defaults to True.
+    """
     day_idx = dataframe['timestamp'] - dataframe['timestamp'][0]
     day_idx = [timestamp.days for timestamp in day_idx]
     N_days   = list(set(day_idx))
@@ -750,11 +904,19 @@ def plot_dayBYday(dataframe, column, line_type='-',
 def rainbow_gradient(Npoints):
     ''' returns a gradient list of (n) colors between
         the 6 RGB colors listed in the dictionary 'rainbow'. '''
+    
+    def dickey(dic, n): #don't use dict as a variable name
+        """ I want to use a dictionary because it's easy to read, but I want to 
+            use it like a list. This returns the Nth element in dictionary. """
+        try:
+            return list(dic)[n] # or sorted(dic)[n] if you want the keys to be sorted
+        except IndexError:
+            print('not enough keys')
+        
     rainbow = {'R': np.array([255,   0,   0]),
                'O': np.array([255, 127,   0]),
                'Y': np.array([255, 255,   0]),
                'G': np.array([  0, 255,   0]),
-               # 'G': np.array([ 10,  74,  23]),
                'B': np.array([  0,   0, 255]),
                'P': np.array([143,   0, 255])}
     
@@ -792,13 +954,7 @@ def RGBave(C1, C2, w1=0.5, w2=0.5):
     return np.sqrt(average)
     
 
-def dickey(dic, n): #don't use dict as a variable name
-    """ I want to use a dictionary because it's easy to read, but I want to 
-        use it like a list. This returns the Nth element in dictionary. """
-    try:
-        return list(dic)[n] # or sorted(dic)[n] if you want the keys to be sorted
-    except IndexError:
-        print('not enough keys')
+
 
 
 
