@@ -135,8 +135,10 @@ data = data.sort_values(by=['timestamp'])
 clean_data = clean.filterSpikes(data.copy(), 'AI7 voltage', 0.051, counterMax=5)
 clean_data = clean.filterSpikes(clean_data, 'AI6 voltage', avenoise_ai6)
 
+
 """ Remove Nans from the dataframe: """
-clean_data = clean.clearNaNs(clean_data)
+clean_data.dropna(inplace=True)
+clean_data = clean_data.reset_index()
 
 # """ Plot data for inspection: """
 # clean.plot_monthBYmonth(clean_data, 'AI7 voltage', print_text=False)

@@ -77,10 +77,11 @@ def filterSpikes(data, col2filt, threshold, counterMax=100):
 """ ***************************************** """
 """ Finer grade of filter for removing spikes """
 """ ***************************************** """
-def finefilter(data, col2filt, Nthresh, n_loops=10,
-               cutoff=0.1, width=10, xaxis='time'):
+def finefilter(data, col2filt, Nthresh=10, n_loops=10,
+               cutoff=0.1, width=10, xaxis='time',
+               print_check=False):
     """ 
-    This function applies a voltage spike filter of iner grade than 
+    This function applies a voltage spike filter of finer grade than 
     filterSpikes to the data:
     
     Parameters:
@@ -91,20 +92,20 @@ def finefilter(data, col2filt, Nthresh, n_loops=10,
     col2filt : str
         Signal to check for a slow spike via pearson test.
     
-    Nthresh : 
+    Nthresh : int
         Defines the minimum number of points in which a seperation of points 
-        is considered a jump of nans.
-        
-    n_loops : int
-        The number of times to perform the filter over the data. Defaults to
-        10.
+        is considered a jump of NaNs.
         
     cutoff : float
-        Cutoff for when the pearson coeff of the voltage signal is too 
+        Cutoff for when the gradient coeff of the voltage signal is too 
         steep. Defaults to 0.1.
         
     width : int
          Number of points to use in the pearson correlation. Defaults to 10
+        
+    n_loops : int
+        The number of times to repeatedly perform the filter over the data. 
+        Defaults to 10.
         
     xaxis : str
         Alternative axis to correlate the voltage data with. The default 
@@ -112,7 +113,8 @@ def finefilter(data, col2filt, Nthresh, n_loops=10,
     """
     
     def checkSlope(dataframe, column, edgesindex, side, 
-                   cutoff=0.1, width=10, xaxis='time'):
+                   cutoff=0.1, width=10, xaxis='time',
+                   print_check=False):
         """ 
         This function calculates the slope of a set of points on either 
         side of a reference point. If the slope is steeper than desired 
@@ -166,6 +168,8 @@ def finefilter(data, col2filt, Nthresh, n_loops=10,
             r = np.mean(rise/run)
             
             #Next: check if r > 0.7ish. If so, remove points.
+            if print_check:
+                print('Is ', np.abs(r), ' > ', cutoff, '?')
             if np.abs(r) > cutoff:
                 dataframe[col2filt].iloc[ start:end ] = np.nan
                 
@@ -196,9 +200,9 @@ def finefilter(data, col2filt, Nthresh, n_loops=10,
         index2 = np.array( [False] + index2 )
         rightedges_idx = index[index2[::-1]]           #Get the index number of the point after the jump
 
-        """ Check pearson's r of either side of edge points (defaults to 10): """
-        testframe = checkSlope(testframe, col2filt, rightedges_idx, 'right', width=width)
-        testframe = checkSlope(testframe, col2filt, leftedges_idx, 'left', width=width)
+        """ Check gradient of either side of edge points (defaults to 10): """
+        testframe = checkSlope(testframe, col2filt, rightedges_idx, 'right', cutoff=cutoff, width=width, print_check=print_check)
+        testframe = checkSlope(testframe, col2filt, leftedges_idx, 'left', cutoff=cutoff, width=width, print_check=print_check)
         
         """ Prep for next loop: """
         width = width*2
@@ -212,7 +216,6 @@ def finefilter(data, col2filt, Nthresh, n_loops=10,
 """ *************** """
 """ Moving average: """
 """ *************** """
-# 
 def movingFilter(dataframe, col2filt, width=10, threshold=1.0):
     """ 
     Uses a moving average to calculate the average slope across a set of 
@@ -254,31 +257,6 @@ def movingFilter(dataframe, col2filt, width=10, threshold=1.0):
         else:
             select = [each_item + 1 for each_item in select]
     
-    return dataframe
-
-
-
-
-#%% Function:
-""" ******************************* """
-""" Remove Nans from the dataframe: """
-""" ******************************* """
-def clearNaNs(dataframe):
-    """ 
-    Remove all rows where there is a nan in either 'AI6 voltage' or 
-    'AI7 voltage':         
-    
-    Parameters:
-    -----------
-    dataframe : dataframe
-        The data frame containing the AI7 voltage cavity drift data you 
-        would like to clean.
-    """
-    is_NaN = dataframe.isnull()  #isnull()
-    is_NaN = is_NaN['AI6 voltage'] | is_NaN['AI7 voltage']
-
-    dataframe = dataframe.drop(dataframe[is_NaN].index)
-    dataframe = dataframe.reset_index()
     return dataframe
 
 
