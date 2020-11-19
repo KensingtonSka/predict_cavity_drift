@@ -15,27 +15,53 @@ import numpy as np
 
 
 def sortLVMdata( basepath, folders, **kwargs ):
-    #Sorts out data recorded by SALLI to .lvm files:
-
-    #Parameters:
-    #    basepath (str):The string of the path to inside the Pro_Em_processing folder.
-    #    folders (str):A list of strings indicating which folders in Pro_Em_processing to take .lvm data from.
-
-    #Optional:
-    #    SAMP_PERIOD (float): The desired number of data samples per second. 
-    #    searchtype    (str): How to sort CavityData should deal with folders. Possible options are:
-    #              'between':   loads data from all folders found between the first and last elements in the folder list
-    #             'specific':   loads data from only the folders specified
-    #    progress     (bool): Whether or not to display progress information.
-    #    temppath      (str): Path to temperature data (including the filename itself).
-    #    secfromgeo  (float): How close the time needs to be to the geography data in seconds.
-    #    smoothtype    (str): Sets if and which smooth function to apply the data when it is loaded.
-    #                     '':   Applies no smoothing (default)
-    #                'SavGo':   Applies a Savitzky-Golay filter
+    """ 
+    Sorts out data recorded in the .lvm files recorded by SALLI into a 
+    pandas dataframe.
     
-    #Returns:
-    #    data(dataframe):A dataframe of all the data found in or between the folders specified by the user
+    Parameters:
+    -----------
+    basepath : str
+        The string of the path to inside the Pro_Em_processing folder.
+        
+    folders : str (list)
+        A list of strings indicating which folders in Pro_Em_processing to take
+        .lvm data from.
     
+    searchtype : str
+        How to sort CavityData should deal with folders. Possible options are:
+             'between':  loads data from all folders found between the first and last elements in the folder list
+            'specific':  loads data from only the folders specified
+    
+    
+    SAMP_PERIOD : float
+        The desired number of data samples per second. 
+        
+    
+    progress : bool
+        Whether or not to display progress information.
+        
+    
+    temppath : str
+        Path to temperature data (including the filename itself).
+        
+    
+    secfromgeo : float
+        How close the time needs to be to the geography data in seconds.
+        
+    
+    smoothtype : str
+        Sets if and which smooth function to apply to the data when it is loaded.
+             '':   Applies no smoothing (default)
+        'SavGo':   Applies a Savitzky-Golay filter
+        
+        
+    Returns:
+    -----------
+    data : dataframe
+        A dataframe of all the data found in or between the folders specified
+        by the user.
+    """
 
     searchtype  = kwargs.get('searchtype','specific')
     SAMP_PERIOD = kwargs.get('samp_period',1)  #1/Hz   (seconds per sample)
@@ -203,8 +229,8 @@ def sortLVMdata( basepath, folders, **kwargs ):
             
         # #Smooth the data if smooth request was called:
         if smoothtype != '':
-            AMdata = applySmoothing(AMdata, 'AI6 voltage', smoothtype)
-            FMdata = applySmoothing(FMdata, 'AI7 voltage', smoothtype)
+            AMdata = applySmoothing(AMdata, 'AI6 voltage', smoothtype=smoothtype)
+            FMdata = applySmoothing(FMdata, 'AI7 voltage', smoothtype=smoothtype)
         
         
         #Create timestamp column:
@@ -306,24 +332,41 @@ def sortLVMdata( basepath, folders, **kwargs ):
     Function to append data to an already created dataframe: 
 """
 def appendLVMdata( basepath, folders, df2append2, **kwargs ):
-    #Sorts out data recorded by SALLI to .lvm files and appends it to the passed dataframe:
-
-    #Parameters:
-    #    basepath (str):The string of the path to inside the Pro_Em_processing folder.
-    #    folders (str):A list of strings indicating which folders in Pro_Em_processing to take .lvm data from.
-    #    df2append2 (dataframe):A dataframe that the will have new data appened to it. 
-    #                           Must of the same structure that 'sortCavityData' outputs:
-    #                           ['time', 'timestamp', 'AI6 voltage', 'AI7 voltage']
+    """ 
+    Sorts out data recorded by SALLI to .lvm files and appends it to the 
+    passed dataframe.
     
-    #Optional:
-    #    SAMP_PERIOD (float):The desired number of data samples per second. 
-    #    searchtype (str):How to sort CavityData should deal with folders. Possible options are:
-    #                   'between': loads data from all folders found between the first and last elements in the folder list
-    #                   'between': loads data from only the folders specified
-
-    #Returns:
-    #    data(dataframe):A dataframe of all the data found in or between the folders specified by the user
+    Parameters:
+    -----------
+    basepath : str
+        The string of the path to inside the Pro_Em_processing folder.
+        
+    folders : str (list)
+        A list of strings indicating which folders in Pro_Em_processing to take
+        .lvm data from.
     
+    df2append2 : dataframe
+        A dataframe that the will have new data appened to it. Must be of the 
+        same structure that 'sortCavityData' outputs:
+        ['time', 'timestamp', 'AI6 voltage', 'AI7 voltage']
+    
+    SAMP_PERIOD : float
+        The desired number of data samples per second. 
+        
+    
+    searchtype : str
+        How to sort CavityData should deal with folders. Possible options are:
+            'between': loads data from all folders found between the first 
+                       and last elements in the folder list
+            'between': loads data from only the folders specified
+        
+        
+    Returns:
+    -----------
+    data : dataframe
+        A dataframe of all the data found in or between the folders specified 
+        by the user.
+    """
     searchtype = kwargs.get('searchtype','specific')
     SAMP_PERIOD = kwargs.get('samp_period',1)  #1/Hz   (one sample per 1 seconds)
     progress = kwargs.get('progress',False)
@@ -349,7 +392,24 @@ def appendLVMdata( basepath, folders, df2append2, **kwargs ):
 """ 
     Apply smooth function:
 """
-def applySmoothing(dataframe, column, smoothtype):
+def applySmoothing(dataframe, column, smoothtype='SavGo'):
+    """ 
+    Applies a Savitzky-Golay filter to the data in the specified pandas 
+    dataframe column.
+    
+    Parameters:
+    -----------
+    dataframe : str
+        The dataframe containing the data you would like to apply a smoothing. 
+        filter to
+        
+    column : str 
+        The dataframe column to apply the filter to.
+    
+    smoothtype : str 
+        The type of smoothing to use. This input parameter currently does 
+        nothing as only a Savitzky-Golay filter can be applied.
+    """
     
     #Call data:
     y = dataframe[column]

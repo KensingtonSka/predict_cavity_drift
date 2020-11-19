@@ -703,7 +703,8 @@ def calibrate(dataframe, remove_old_columns=False):
 """ ********************************** """
 def plot_monthBYmonth(dataframe, column='AI7 voltage', fixcolour=False, print_text=True):
     """ 
-    Plots the cavity drift from each day into month wise subplots.
+    Plots the cavity drift from each day into month wise subplots. Each day is 
+    coloured in order from red through to violet (via a rainbow gradient).
     
     Parameters:
     -----------
@@ -827,7 +828,8 @@ def plot_dayBYday(dataframe, column='AI7 voltage', line_type='-',
                   print_text=True):
     """ 
     Plots all the cavity drift day in a single plot, highlighting each 
-    individual day with a different colour.
+    individual day with a different colour. Each day is coloured in order 
+    from red through to violet (via a rainbow gradient).
     
     Parameters:
     -----------
