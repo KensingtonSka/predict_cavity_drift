@@ -815,8 +815,7 @@ def plot_monthBYmonth(dataframe, column='AI7 voltage', fixcolour=False, print_te
                 axes[row, col].set_title( this_month_str + ', ' + this_year_str )
                 axes[row, col].set_xlabel('Time (s)')
                 axes[row, col].set_ylabel(column + ' (V)')
-
-        
+        plt.tight_layout()
     
     
 #%%
@@ -894,6 +893,7 @@ def plot_dayBYday(dataframe, column='AI7 voltage', line_type='-',
     axes.set_title('Raw Data')
     fig.autofmt_xdate()
     
+    return fig, axes
     
 
 

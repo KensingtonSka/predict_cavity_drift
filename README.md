@@ -3,19 +3,27 @@
 A set of scripts to use machine learning to predict the non-linear (and non-sine) long term frequency drift cause by temperature changes inside the cavity in the lab. This will then be used to update a temperature control box ahead of time so that the cavity is the correct temperature at the correct time.
 
 
+### `sortLVM.py`
+This script contains functions used to take the data stored in the lvm files that the Single Atom Lab LabVIEW Interface (SALLI) generates and store it into a pandas dataframe. To save on ram I would recomend setting `sample_period` (which defines the minimum number of seconds present between samples) to 600 (i.e. 1 sample point every 10 minutes).
+An example of the data which has been pre-loaded and pickled into `cavdat_20200701-20201005` is shown below:
+![Test Image](https://github.com/KensingtonSka/predict_cavity_drift/Figures/uncleaned_data.png)
+
+
 ## Usage
 
 Simply clone the repo and change the paths in `Scripts/predictCavityDrift.py`
 As an example of code usage, I have included a set of pre-sorted cavity data in the pickled file: `cavdat_20200701-20201005`. Additionally, I have included examples of the .lvm and geography build temperature data files in the `Example LVM data` folder.
 
 
-
 ## Contributing
+
 Pull requests are welcome. For major changes, please open an issue first to discuss what you would like to change.
+
 
 
 ## License
 [MIT](https://choosealicense.com/licenses/mit/)
+
 
 
 ## Version info:

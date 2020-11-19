@@ -154,7 +154,7 @@ corrected_data = clean.interpolate_betweenDays(corrected_data.copy())
 
 """ Plot data for inspection: """
 clean.plot_monthBYmonth(corrected_data, column='AI7 voltage', print_text=False)
-clean.plot_dayBYday(corrected_data, column='AI7 voltage', zero_reference=False, timeaxis = 'timestamp', print_text=False)
+figs, axes = clean.plot_dayBYday(corrected_data, column='AI7 voltage', zero_reference=False, timeaxis = 'timestamp', print_text=False)
 
 
 
@@ -341,22 +341,22 @@ x4plot = calibrated_data.index
 
 if n == 3:
     #Full plot for reference:
-    # axs[0].plot(x4plot, calibrated_data[dset[select]],'-b')
-    # axs[0].plot(x4plot[:-(predict_idx+1)], pipe.predict(X),'-r')
-    # axs[0].set_ylabel('$f$ (MHz)')
-    axs[0].plot(x4plot[:-(predict_idx+1)], np.ones_like(x4plot[:-(predict_idx+1)],dtype='int'),'-g')
-    axs[0].plot(x4plot[:-(predict_idx+1)], calibrated_data[dset[select]][:-(predict_idx+1)]-pipe.predict(X),'.k')
-    axs[0].set_ylabel('Error (MHz)')
+    axs[0].plot(x4plot, calibrated_data[dset[select]],'.b', markersize=2)
+    axs[0].plot(x4plot[:-(predict_idx+1)], pipe.predict(X),'.r', markersize=1)
+    axs[0].set_ylabel('$f$ (MHz)')
+    # axs[0].plot(x4plot[:-(predict_idx+1)], np.ones_like(x4plot[:-(predict_idx+1)],dtype='int'),'-g')
+    # axs[0].plot(x4plot[:-(predict_idx+1)], calibrated_data[dset[select]][:-(predict_idx+1)]-pipe.predict(X),'.k')
+    # axs[0].set_ylabel('Error (MHz)')
 
 #Predicted part:
 axs[n-2].plot(x4plot[-predict_idx:], calibrated_data[dset[select]][-predict_idx:],'-b')
-axs[n-2].plot(x4plot[-predict_idx:], y_predict,'.r')
+axs[n-2].plot(x4plot[-predict_idx:], y_predict,'.r', markersize=2)
 axs[n-2].set_ylabel('$f$ (MHz)')
 axs[n-2].set_xticklabels([])
 
 #Diff prediction:
 axs[n-1].plot(x4plot[-(predict_idx-1):], np.diff(calibrated_data[dset[select]][-predict_idx:]),'-b')
-axs[n-1].plot(x4plot[-(predict_idx-1):], np.diff(y_predict),'.r')
+axs[n-1].plot(x4plot[-(predict_idx-1):], np.diff(y_predict),'.r', markersize=4)
 axs[n-1].set_ylabel('$\Delta f$ (MHz)')
 axs[n-1].set_xlabel('Time (s)')
 fig.autofmt_xdate()

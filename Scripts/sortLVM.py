@@ -34,8 +34,8 @@ def sortLVMdata( basepath, folders, **kwargs ):
             'specific':  loads data from only the folders specified
     
     
-    SAMP_PERIOD : float
-        The desired number of data samples per second. 
+    sample_period : float
+        The minimum number of seconds seperating each sample. 
         
     
     progress : bool
@@ -64,7 +64,7 @@ def sortLVMdata( basepath, folders, **kwargs ):
     """
 
     searchtype  = kwargs.get('searchtype','specific')
-    SAMP_PERIOD = kwargs.get('samp_period',1)  #1/Hz   (seconds per sample)
+    sample_period = kwargs.get('sample_period',1)  #1/Hz   (seconds per sample)
     progress    = kwargs.get('progress',False)
     temppath    = kwargs.get('temppath','') 
     secfromgeo  = kwargs.get('secfromgeo', 2.5) #(s) How close the time needs to be to the geography data
@@ -83,9 +83,9 @@ def sortLVMdata( basepath, folders, **kwargs ):
         temper['TIMESTAMP'] = pd.to_datetime(temper['TIMESTAMP'], format='%Y-%m-%d %H:%M:%S.%f')
         timestep = temper['TIMESTAMP'].diff().iloc[1].seconds
         
-        # Here the temperature data trumps SAMP_PERIOD. But if SAMP_PERIOD is
+        # Here the temperature data trumps sample_period. But if sample_period is
         # larger than timestep we'll choose to use the largest integer multiple of timestep:
-        stepsPerStep = int(np.floor(SAMP_PERIOD/timestep))
+        stepsPerStep = int(np.floor(sample_period/timestep))
         if stepsPerStep == 0:
             stepsPerStep = 1
         #Indicies of the rows to keep:
@@ -249,9 +249,9 @@ def sortLVMdata( basepath, folders, **kwargs ):
         
         """ Trim data to have one data point per t_0 seconds: """        
         if temppath == '':
-            #Check the actaul sampling rate in the data against our desired sampling rate ('SAMP_PERIOD'):
+            #Check the actaul sampling rate in the data against our desired sampling rate ('sample_period'):
             datastepsize = np.mean( AMdata['timestamp'].diff() ).total_seconds()
-            step_size = int(np.round(SAMP_PERIOD/datastepsize))
+            step_size = int(np.round(sample_period/datastepsize))
             
             #Indicies of row to keep:
             keep_index = np.arange(0, len(AMdata)-1, step_size) #Build array from 0 to 'len' in 'step_size' steps
@@ -350,8 +350,8 @@ def appendLVMdata( basepath, folders, df2append2, **kwargs ):
         same structure that 'sortCavityData' outputs:
         ['time', 'timestamp', 'AI6 voltage', 'AI7 voltage']
     
-    SAMP_PERIOD : float
-        The desired number of data samples per second. 
+    sample_period : float
+        The minimum number of seconds seperating each sample. 
         
     
     searchtype : str
@@ -368,12 +368,12 @@ def appendLVMdata( basepath, folders, df2append2, **kwargs ):
         by the user.
     """
     searchtype = kwargs.get('searchtype','specific')
-    SAMP_PERIOD = kwargs.get('samp_period',1)  #1/Hz   (one sample per 1 seconds)
+    sample_period = kwargs.get('samp_period',1)  #1/Hz   (one sample per 1 seconds)
     progress = kwargs.get('progress',False)
     temppath = kwargs.get('temppath','')
     
     #Call data from the specified folders:
-    data = sortLVMdata( basepath, folders, searchtype=searchtype, SAMP_PERIOD=SAMP_PERIOD, progress=progress, temppath=temppath)
+    data = sortLVMdata( basepath, folders, searchtype=searchtype, sample_period=sample_period, progress=progress, temppath=temppath)
     
     #Append new data to the passed dataframe:
     data = df2append2.append(data, ignore_index=True)
