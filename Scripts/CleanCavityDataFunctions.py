@@ -925,6 +925,7 @@ def rainbow_gradient(Npoints):
     #Preallocate a storage array and the positions of the gradient values (to use for math):
     desired_weights = np.arange(0,Npoints,1)/(Npoints-1)
     RGBs = np.zeros((Npoints,3))
+    #Weight percentage indicating when a colour change should occur:
     w2 = 1/(len(rainbow)-1)
         
     if Npoints > 1:
@@ -935,8 +936,11 @@ def rainbow_gradient(Npoints):
             
             for li in range(len(desired_weights)):
                 if ((desired_weights[li] <= segment[1]) and (desired_weights[li] >= segment[0])):
+                    #Calculate the weighting between colours:
                     w1 = segment[1]-segment[0]
                     w2 = desired_weights[li]-segment[0]
+
+                    #Compute the average RGB:
                     RGBs[li] = RGBave(C1, C2, w1, w2)
             segment += 0.2
     else:
@@ -951,8 +955,8 @@ def RGBave(C1, C2, w1=0.5, w2=0.5):
        being averaged, and then converted back. """
        # Cn: colour n
        # wn: weight n
-    average = w1*(C2**2) + w2*(C1**2)
-    average = average/(w1 + w2)
+    average = w1*(C1**2) + w2*(C2**2)
+    average = average/(w1 + w2) #Normalise
     return np.sqrt(average)
     
 
