@@ -42,7 +42,7 @@ It is worth noting that `plot_monthBYmonth` assumes that there are no nans prese
   
 
 ### `PredictCavityDrift.py`
-A sample script which will collect data using `sortLVM.py` if the element `load_data` in the dictionary `datadict` is set to `False`. Otherwise the script will load the pickled file found in `root` under the name dictionary's `filename` element. From there the script will apply a few of the filtering and interpolation functions from `CleanCavityDataFunctions.py`. From there the script will call several machine learning algorithms from the scikit-learn package, apply them to the data `100` times each, and choose whichever model predicts the data best (on average). The below Figure shows the result of applying these functions to the data pickled in the sample file: `cavdat_20200701-20201005`.
+A sample script which will collect data using `sortLVM.py` if the element `load_data` in the dictionary `datadict` is set to `False`. Otherwise the script will load the pickled file found in `root` under the name dictionary's `filename` element. From there the script will apply a few of the filtering and interpolation functions from `CleanCavityDataFunctions.py`. From there the script will call several machine learning algorithms from the scikit-learn package, apply them to the data `100` times each, and choose whichever model predicts the data best (on average). The below Figure shows the result of applying these functions to the data pickled in the sample file: `cavdat_20200701-20201005`.  
 ![model](Figures/ML_fits.png)  
   
 ### `RewriteCavityFiles2.m`
